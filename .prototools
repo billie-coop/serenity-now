@@ -1,0 +1,8 @@
+node = "22.13.1"
+bun = "latest"
+
+[settings]
+auto-install = true
+
+[tools.node]
+bundled-npm = true

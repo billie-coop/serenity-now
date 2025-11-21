@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/steve/Dev/github.com/billie-coop/billie-coop-monorepo/repo-manager/**)",
+      "WebSearch",
+      "Bash(yarn build)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
