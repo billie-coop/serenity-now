@@ -2,7 +2,7 @@
 // Phase 2: Scans TypeScript/JavaScript files to track workspace package usage
 // Deno version using built-in APIs
 
-import { join, relative } from "@std/path";
+import { globToRegExp, join, relative } from "@std/path";
 import { expandGlob } from "@std/fs";
 import { log } from "../utils/logging.ts";
 import type {
@@ -16,7 +16,7 @@ import type {
 // File extensions to scan for imports
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
 
-// Patterns to exclude from scanning
+// Default patterns to exclude from scanning
 const DEFAULT_EXCLUDE_PATTERNS = [
   "**/node_modules/**",
   "**/dist/**",
@@ -32,6 +32,13 @@ const DEFAULT_EXCLUDE_PATTERNS = [
   "**/*.spec.ts",
   "**/*.spec.tsx",
 ];
+
+/**
+ * Gets exclude patterns from config or uses defaults
+ */
+function getExcludePatterns(config: SyncConfig): string[] {
+  return config.excludePatterns || DEFAULT_EXCLUDE_PATTERNS;
+}
 
 // Regular expressions for parsing imports
 const IMPORT_PATTERNS = {
@@ -61,17 +68,14 @@ const IMPORT_PATTERNS = {
 /**
  * Checks if a file should be excluded
  */
-function shouldExclude(filePath: string): boolean {
+function shouldExclude(filePath: string, patterns: string[]): boolean {
   const normalizedPath = filePath.replace(/\\/g, "/");
 
-  for (const pattern of DEFAULT_EXCLUDE_PATTERNS) {
-    // Convert glob pattern to regex
-    const regexPattern = pattern
-      .replace(/\*\*/g, ".*")
-      .replace(/\*/g, "[^/]*")
-      .replace(/\./g, "\\.");
+  for (const pattern of patterns) {
+    // Use Deno's standard library for glob-to-regex conversion
+    const regex = globToRegExp(pattern, { extended: true, globstar: true });
 
-    if (new RegExp(regexPattern).test(normalizedPath)) {
+    if (regex.test(normalizedPath)) {
       return true;
     }
   }
@@ -84,6 +88,7 @@ function shouldExclude(filePath: string): boolean {
  */
 async function findSourceFiles(
   projectRoot: string,
+  excludePatterns: string[],
   verbose: boolean,
 ): Promise<string[]> {
   const files: string[] = [];
@@ -96,7 +101,7 @@ async function findSourceFiles(
         if (entry.isFile) {
           const relativePath = relative(projectRoot, entry.path);
 
-          if (!shouldExclude(relativePath)) {
+          if (!shouldExclude(relativePath, excludePatterns)) {
             files.push(relativePath);
           }
         }
@@ -272,6 +277,7 @@ export async function scanProjectImports(
 
   log.step("Scanning imports in all projects...");
 
+  const excludePatterns = getExcludePatterns(config);
   let totalFiles = 0;
   let totalImports = 0;
 
@@ -289,7 +295,11 @@ export async function scanProjectImports(
     }
 
     // Find all source files in the project
-    const sourceFiles = await findSourceFiles(project.root, verbose);
+    const sourceFiles = await findSourceFiles(
+      project.root,
+      excludePatterns,
+      verbose,
+    );
     totalFiles += sourceFiles.length;
 
     // Parse imports from each file

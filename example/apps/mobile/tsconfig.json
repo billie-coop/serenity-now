@@ -18,7 +18,8 @@
       "@example/ui/*": [
         "../../packages/ui/src/*"
       ]
-    }
+    },
+    "composite": true
   },
   "references": [
     {

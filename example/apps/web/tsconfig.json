@@ -24,7 +24,8 @@
       "@example/utils/*": [
         "../../packages/utils/src/*"
       ]
-    }
+    },
+    "composite": true
   },
   "references": [
     {

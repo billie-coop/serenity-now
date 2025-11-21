@@ -12,7 +12,8 @@
       "@example/utils/*": [
         "../utils/src/*"
       ]
-    }
+    },
+    "composite": true
   },
   "references": [
     {

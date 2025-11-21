@@ -30,7 +30,7 @@ async function exists(path: string): Promise<boolean> {
 
 /**
  * Resolves the entry point for a dependency
- * Uses a cascade of strategies to find the best entry point
+ * Only uses explicit package.json fields - no guessing
  */
 async function resolveEntryPoint(
   dependency: ProjectInfo,
@@ -38,120 +38,42 @@ async function resolveEntryPoint(
 ): Promise<EntryPointInfo> {
   const { verbose = false } = options;
 
-  // Strategy 1: PREFER TypeScript source files (for tsconfig path mappings)
-  // Check if src/index.ts or src/index.tsx exists - this is what TypeScript needs
-  const tsSourcePatterns = ["src/index.ts", "src/index.tsx"];
-  for (const pattern of tsSourcePatterns) {
-    const sourcePath = join(dependency.root, pattern);
-    if (await exists(sourcePath)) {
-      if (verbose) {
-        log.debug(
-          `  Entry point for ${dependency.id}: ${pattern} (TypeScript source)`,
-        );
-      }
-      return {
-        path: pattern,
-        exists: true,
-        isTypeDefinition: false,
-      };
+  // Strategy 1: Check for TypeScript source at src/index.ts (convention)
+  const tsSource = "src/index.ts";
+  const tsSourcePath = join(dependency.root, tsSource);
+  if (await exists(tsSourcePath)) {
+    if (verbose) {
+      log.debug(
+        `  Entry point for ${dependency.id}: ${tsSource} (TypeScript source)`,
+      );
     }
+    return {
+      path: tsSource,
+      exists: true,
+      isTypeDefinition: false,
+    };
   }
 
-  // Strategy 2: Check package.json types/typings field (for packages with .d.ts files)
-  if (dependency.packageJson.types) {
-    const typePath = join(dependency.root, dependency.packageJson.types);
+  // Strategy 2: Check package.json types/typings field
+  const typesField = dependency.packageJson.types ||
+    dependency.packageJson.typings;
+  if (typesField) {
+    const typePath = join(dependency.root, typesField);
     if (await exists(typePath)) {
       if (verbose) {
         log.debug(
-          `  Entry point for ${dependency.id}: ${dependency.packageJson.types} (from types field)`,
+          `  Entry point for ${dependency.id}: ${typesField} (from types/typings field)`,
         );
       }
       return {
-        path: dependency.packageJson.types,
+        path: typesField,
         exists: true,
         isTypeDefinition: true,
       };
     }
   }
 
-  if (dependency.packageJson.typings) {
-    const typePath = join(dependency.root, dependency.packageJson.typings);
-    if (await exists(typePath)) {
-      if (verbose) {
-        log.debug(
-          `  Entry point for ${dependency.id}: ${dependency.packageJson.typings} (from typings field)`,
-        );
-      }
-      return {
-        path: dependency.packageJson.typings,
-        exists: true,
-        isTypeDefinition: true,
-      };
-    }
-  }
-
-  // Strategy 3: Check package.json exports field (modern packages)
-  if (dependency.packageJson.exports) {
-    const exports = dependency.packageJson.exports;
-
-    // Handle string export
-    if (typeof exports === "string") {
-      const exportPath = join(dependency.root, exports);
-      if (await exists(exportPath)) {
-        if (verbose) {
-          log.debug(
-            `  Entry point for ${dependency.id}: ${exports} (from exports field)`,
-          );
-        }
-        return {
-          path: exports,
-          exists: true,
-          isTypeDefinition: exports.endsWith(".d.ts"),
-        };
-      }
-    }
-
-    // Handle object export with conditions
-    if (typeof exports === "object" && exports !== null) {
-      // Check for types export first
-      if (exports.types && typeof exports.types === "string") {
-        const typePath = join(dependency.root, exports.types);
-        if (await exists(typePath)) {
-          if (verbose) {
-            log.debug(
-              `  Entry point for ${dependency.id}: ${exports.types} (from exports.types)`,
-            );
-          }
-          return {
-            path: exports.types,
-            exists: true,
-            isTypeDefinition: true,
-          };
-        }
-      }
-
-      // Check for default export
-      const defaultExport = exports.default || exports["."] || exports.import ||
-        exports.require;
-      if (defaultExport && typeof defaultExport === "string") {
-        const exportPath = join(dependency.root, defaultExport);
-        if (await exists(exportPath)) {
-          if (verbose) {
-            log.debug(
-              `  Entry point for ${dependency.id}: ${defaultExport} (from exports field)`,
-            );
-          }
-          return {
-            path: defaultExport,
-            exists: true,
-            isTypeDefinition: defaultExport.endsWith(".d.ts"),
-          };
-        }
-      }
-    }
-  }
-
-  // Strategy 4: Check package.json main/module fields
+  // Strategy 3: Check package.json main/module fields
   const mainField = dependency.packageJson.module ||
     dependency.packageJson.main;
   if (mainField) {
@@ -170,44 +92,14 @@ async function resolveEntryPoint(
     }
   }
 
-  // Strategy 5: Common patterns (fallback)
-  const commonPatterns = [
-    "src/index.js",
-    "src/index.jsx",
-    "index.ts",
-    "index.tsx",
-    "index.js",
-    "index.jsx",
-    "lib/index.js",
-    "lib/index.ts",
-    "dist/index.js",
-    "dist/index.d.ts",
-  ];
-
-  for (const pattern of commonPatterns) {
-    const fullPath = join(dependency.root, pattern);
-    if (await exists(fullPath)) {
-      if (verbose) {
-        log.debug(
-          `  Entry point for ${dependency.id}: ${pattern} (common pattern)`,
-        );
-      }
-      return {
-        path: pattern,
-        exists: true,
-        isTypeDefinition: pattern.endsWith(".d.ts"),
-      };
-    }
-  }
-
-  // Fallback: Use src/index.ts as convention even if it doesn't exist yet
+  // No entry point found - return src/index.ts as convention (may not exist)
   if (verbose) {
     log.debug(
-      `  Entry point for ${dependency.id}: src/index.ts (fallback convention)`,
+      `  Entry point for ${dependency.id}: ${tsSource} (convention, may not exist)`,
     );
   }
   return {
-    path: "src/index.ts",
+    path: tsSource,
     exists: false,
     isTypeDefinition: false,
   };
@@ -259,16 +151,13 @@ interface DiamondPattern {
 function detectDiamondDependencies(
   projects: Record<string, ResolvedProject>,
   _inventory: ProjectInventory,
+  config: SyncConfig,
   verbose: boolean,
 ): DiamondPattern[] {
   const patterns: DiamondPattern[] = [];
 
-  // Universal utilities that are expected to be imported everywhere
-  const universalUtilities = new Set([
-    "@billie-coop/ts-utils",
-    "@billie-coop/date-utils",
-    "@billie-coop/math-utils",
-  ]);
+  // Universal utilities that are expected to be imported everywhere (from config)
+  const universalUtilities = new Set(config.universalUtilities || []);
 
   // Build a map of each project's transitive dependencies
   function getTransitiveDependencies(
@@ -611,6 +500,7 @@ export async function resolveGraph(
   const diamondPatterns = detectDiamondDependencies(
     projects,
     inventory,
+    config,
     verbose,
   );
 

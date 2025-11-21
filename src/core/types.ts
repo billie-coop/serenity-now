@@ -38,6 +38,8 @@ export interface SyncConfig {
   defaultDependencies?: string[];
   ignoreProjects?: string[];
   ignoreImports?: string[];
+  excludePatterns?: string[]; // File/directory patterns to exclude from import scanning
+  universalUtilities?: string[]; // Packages expected to be imported everywhere (diamond deps OK)
   // DEPRECATED - use workspaceTypes instead
   enforceNamePrefix?: string;
   tsconfig?: {
@@ -123,6 +125,7 @@ export interface EmitResult {
 export interface PackageJson {
   name?: string;
   version?: string;
+  type?: "module" | "commonjs";
   private?: boolean;
   workspaces?: string[] | { packages: string[] };
   dependencies?: Record<string, string>;

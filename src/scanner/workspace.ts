@@ -49,7 +49,9 @@ async function findProjects(
   const projects = new Map<string, string>();
 
   for (const pattern of patterns) {
-    const searchPattern = pattern.endsWith("/*") ? pattern : `${pattern}/*`;
+    // If pattern already contains wildcards, use it as-is
+    // Otherwise append /* to look for subdirectories
+    const searchPattern = pattern.includes("*") ? pattern : `${pattern}/*`;
     const globPattern = join(rootDir, searchPattern, "package.json");
 
     if (verbose) {
@@ -79,6 +81,7 @@ async function findProjects(
 
 /**
  * Determines workspace type configuration for a project
+ * Returns null if no configuration matches
  */
 function determineWorkspaceType(
   relativeRoot: string,
@@ -87,74 +90,25 @@ function determineWorkspaceType(
   workspaceType: "app" | "shared-package" | "unknown";
   workspaceSubType: WorkspaceSubType;
   workspaceConfig?: WorkspaceTypeConfig;
-} {
-  // Check configured patterns
+} | null {
+  // Check configured patterns only - no guessing
   if (config.workspaceTypes) {
     for (const [pattern, typeConfig] of Object.entries(config.workspaceTypes)) {
       const regex = new RegExp(
         `^${pattern.replace(/\*/g, "[^/]+")}$`,
       );
       if (regex.test(relativeRoot)) {
-        const subType = typeConfig.subType ||
-          inferWorkspaceSubType(relativeRoot);
         return {
           workspaceType: typeConfig.type,
-          workspaceSubType: subType,
+          workspaceSubType: typeConfig.subType || "unknown",
           workspaceConfig: typeConfig,
         };
       }
     }
   }
 
-  // Fallback to guessing based on common patterns
-  const workspaceType = relativeRoot.startsWith("apps/") ||
-      relativeRoot.startsWith("websites/") ||
-      relativeRoot === "app"
-    ? "app"
-    : relativeRoot.startsWith("packages/") || relativeRoot === "packages"
-    ? "shared-package"
-    : "unknown";
-
-  return {
-    workspaceType,
-    workspaceSubType: inferWorkspaceSubType(relativeRoot),
-  };
-}
-
-/**
- * Infers workspace sub-type from the project path
- */
-function inferWorkspaceSubType(relativeRoot: string): WorkspaceSubType {
-  const parts = relativeRoot.toLowerCase();
-
-  if (
-    parts.includes("mobile") || parts.includes("ios") ||
-    parts.includes("android")
-  ) {
-    return "mobile";
-  }
-  if (parts.includes("db") || parts.includes("database")) {
-    return "db";
-  }
-  if (parts.includes("marketing")) {
-    return "marketing";
-  }
-  if (parts.includes("plugin")) {
-    return "plugin";
-  }
-  if (parts.includes("ui") || parts.includes("component")) {
-    return "ui";
-  }
-  if (parts.includes("website") || parts.includes("site")) {
-    return "website";
-  }
-  if (
-    parts.includes("lib") || parts.includes("util") || parts.includes("helper")
-  ) {
-    return "library";
-  }
-
-  return "unknown";
+  // No match found - caller should handle this as an error/warning
+  return null;
 }
 
 /**
@@ -230,26 +184,28 @@ export async function discoverWorkspace(
 
     const packageJson = await tryReadJson<PackageJson>(packageJsonPath, {});
 
-    // Find tsconfig.json
-    let tsconfigPath: string | undefined;
-    const tsconfigCandidates = [
-      join(projectRoot, "tsconfig.json"),
-      join(projectRoot, "tsconfig.build.json"),
-    ];
+    // Check for tsconfig.json - required for incremental compilation
+    const tsconfigPath = join(projectRoot, "tsconfig.json");
+    const hasTsconfig = await exists(tsconfigPath, { isFile: true });
 
-    for (const candidate of tsconfigCandidates) {
-      if (await exists(candidate, { isFile: true })) {
-        tsconfigPath = candidate;
-        break;
-      }
+    if (!hasTsconfig) {
+      warnings.push(
+        `Project ${packageName} at ${relativeRoot} is missing tsconfig.json (required for incremental compilation)`,
+      );
     }
 
-    // Determine workspace type
-    const { workspaceType, workspaceSubType, workspaceConfig } =
-      determineWorkspaceType(
-        relativeRoot,
-        config,
+    // Determine workspace type - must match configured patterns
+    const typeMatch = determineWorkspaceType(relativeRoot, config);
+
+    if (!typeMatch) {
+      warnings.push(
+        `Project ${packageName} at ${relativeRoot} does not match any configured workspace type patterns`,
       );
+      // Skip projects that don't match any configured pattern
+      continue;
+    }
+
+    const { workspaceType, workspaceSubType, workspaceConfig } = typeMatch;
 
     // Track workspace configs for reference
     if (workspaceConfig) {
@@ -269,7 +225,7 @@ export async function discoverWorkspace(
       root: projectRoot,
       relativeRoot,
       packageJson,
-      tsconfigPath,
+      tsconfigPath: hasTsconfig ? tsconfigPath : undefined,
       workspaceType,
       workspaceSubType,
       workspaceConfig,
