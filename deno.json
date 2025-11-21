@@ -1,0 +1,38 @@
+{
+  "name": "serenity-now",
+  "version": "0.1.0",
+  "exports": "./mod.ts",
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "check": "deno fmt && deno lint && deno check **/*.ts",
+    "fmt": "deno fmt",
+    "lint": "deno lint",
+    "test": "deno test --allow-all",
+    "dev": "deno run --watch --allow-read --allow-write --allow-env cli.ts",
+    "start": "deno run --allow-read --allow-write --allow-env cli.ts",
+    "build-npm": "deno run --allow-all scripts/build_npm.ts"
+  },
+  "imports": {
+    "@std/fs": "jsr:@std/fs@^1.0.0",
+    "@std/path": "jsr:@std/path@^1.0.0",
+    "@std/fmt": "jsr:@std/fmt@^1.0.0",
+    "@std/cli": "jsr:@std/cli@^1.0.0",
+    "@std/jsonc": "jsr:@std/jsonc@^1.0.0",
+    "zod": "jsr:@zod/zod@^4.1.12"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "fmt": {
+    "exclude": ["**/node_modules", "**/dist", "**/.git", "example/**"]
+  },
+  "lint": {
+    "exclude": ["**/node_modules", "**/dist", "**/.git", "example/**"]
+  },
+  "exclude": ["example/**"]
+}

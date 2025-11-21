@@ -1,23 +1,23 @@
 // Public API for serenity-now
-export { RepoManager } from './core/manager';
-export { Logger } from './utils/logging';
+export { RepoManager } from "./core/manager.ts";
+export { Logger } from "./utils/logging.ts";
 
 // Export types
 export type {
-  SyncConfig,
-  WorkspaceSubType,
-  WorkspaceTypeConfig,
-  ProjectInventory,
-  ProjectInfo,
-  ProjectUsage,
-  ProjectUsageRecord,
-  ResolvedGraph,
-  ResolvedProject,
-  ResolvedDependency,
   Cycle,
   EmitResult,
-  StaleDependencies,
-  PackageJson,
-  TsConfig,
   EntryPointInfo,
-} from './core/types';
+  PackageJson,
+  ProjectInfo,
+  ProjectInventory,
+  ProjectUsage,
+  ProjectUsageRecord,
+  ResolvedDependency,
+  ResolvedGraph,
+  ResolvedProject,
+  StaleDependencies,
+  SyncConfig,
+  TsConfig,
+  WorkspaceSubType,
+  WorkspaceTypeConfig,
+} from "./core/types.ts";

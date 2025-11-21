@@ -1,0 +1,40 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": [
+    "src/**/*"
+  ],
+  "compilerOptions": {
+    "outDir": "../../dist/web",
+    "paths": {
+      "@example/api-client": [
+        "../../packages/api-client/src/index.ts"
+      ],
+      "@example/api-client/*": [
+        "../../packages/api-client/src/*"
+      ],
+      "@example/ui": [
+        "../../packages/ui/src/index.ts"
+      ],
+      "@example/ui/*": [
+        "../../packages/ui/src/*"
+      ],
+      "@example/utils": [
+        "../../packages/utils/src/index.ts"
+      ],
+      "@example/utils/*": [
+        "../../packages/utils/src/*"
+      ]
+    }
+  },
+  "references": [
+    {
+      "path": "../../packages/api-client"
+    },
+    {
+      "path": "../../packages/ui"
+    },
+    {
+      "path": "../../packages/utils"
+    }
+  ]
+}

@@ -1,97 +1,70 @@
-// Simple logging utilities
+// Logging utilities for the sync-deps tool
+// Deno version - using built-in colors
 
-const colors = {
-  reset: '\x1b[0m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  magenta: '\x1b[35m',
-  cyan: '\x1b[36m',
-  gray: '\x1b[90m',
-};
+import { bold, cyan, green, red, yellow } from "@std/fmt/colors";
 
 export class Logger {
   private warnings: string[] = [];
-  private verbose = false;
 
-  constructor(verbose = false) {
-    this.verbose = verbose;
+  constructor(
+    private verbose = false,
+  ) {}
+
+  step(message: string): void {
+    console.log(cyan(bold("→ " + message)));
   }
 
-  setVerbose(verbose: boolean) {
-    this.verbose = verbose;
+  success(message: string): void {
+    console.log(green("✓ " + message));
   }
 
-  info(message: string) {
+  error(message: string): void {
+    console.error(red("✗ " + message));
+  }
+
+  warn(message: string): void {
+    console.warn(yellow("⚠ " + message));
+    this.warnings.push(message);
+  }
+
+  info(message: string): void {
     console.log(message);
   }
 
-  success(message: string) {
-    console.log(`${colors.green}✅${colors.reset} ${message}`);
-  }
-
-  warn(message: string) {
-    this.warnings.push(message);
-    console.log(`${colors.yellow}⚠️${colors.reset}  ${message}`);
-  }
-
-  error(message: string) {
-    console.error(`${colors.red}❌${colors.reset} ${message}`);
-  }
-
-  debug(message: string) {
+  debug(message: string): void {
     if (this.verbose) {
-      console.log(`${colors.gray}[debug]${colors.reset} ${message}`);
+      console.log(message);
     }
   }
 
-  phase(phaseName: string) {
-    console.log(`\n${colors.cyan}═══ ${phaseName} ═══${colors.reset}\n`);
+  section(title: string): void {
+    console.log("\n" + bold(title));
+    console.log("─".repeat(title.length));
   }
 
-  step(stepName: string) {
-    console.log(`${colors.blue}→${colors.reset} ${stepName}`);
+  phase(title: string): void {
+    console.log("\n" + cyan(bold(`Phase: ${title}`)));
+  }
+
+  printSummary(
+    stats: {
+      projectsScanned: number;
+      filesModified: number;
+      staleRemoved: number;
+    },
+  ) {
+    this.section("Summary");
+    console.log(`  Projects scanned: ${stats.projectsScanned}`);
+    console.log(`  Files modified: ${stats.filesModified}`);
+    if (stats.staleRemoved > 0) {
+      console.log(`  Stale dependencies removed: ${stats.staleRemoved}`);
+    }
   }
 
   getWarnings(): string[] {
-    return [...this.warnings];
-  }
-
-  clearWarnings() {
-    this.warnings = [];
-  }
-
-  printSummary(stats: {
-    projectsScanned?: number;
-    dependenciesFound?: number;
-    staleRemoved?: number;
-    filesModified?: number;
-  }) {
-    console.log(`\n${colors.cyan}═══ Summary ═══${colors.reset}`);
-    if (stats.projectsScanned !== undefined) {
-      console.log(`  Projects scanned: ${stats.projectsScanned}`);
-    }
-    if (stats.dependenciesFound !== undefined) {
-      console.log(`  Dependencies found: ${stats.dependenciesFound}`);
-    }
-    if (stats.staleRemoved !== undefined && stats.staleRemoved > 0) {
-      console.log(
-        `  Stale dependencies removed: ${colors.yellow}${stats.staleRemoved}${colors.reset}`,
-      );
-    }
-    if (stats.filesModified !== undefined) {
-      console.log(`  Files modified: ${stats.filesModified}`);
-    }
-    if (this.warnings.length > 0) {
-      console.log(`  Warnings: ${colors.yellow}${this.warnings.length}${colors.reset}`);
-    }
-  }
-
-  section(title: string) {
-    console.log(`\n${colors.magenta}▶ ${title}${colors.reset}`);
+    return this.warnings;
   }
 }
 
-// Default logger instance for convenience
+// Create singleton logger instance
 export const log = new Logger();

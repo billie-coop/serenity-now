@@ -1,73 +1,63 @@
-// Utility functions for file operations and path handling
+// File system utilities
+// Deno version using built-in APIs
 
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import type { FixMe, PackageJson, TsConfig } from '../core/types';
+import { exists } from "@std/fs/exists";
 
-export async function fileExists(filePath: string): Promise<boolean> {
+export async function fileExists(path: string): Promise<boolean> {
   try {
-    await fs.stat(filePath);
-    return true;
+    return await exists(path, { isFile: true });
   } catch {
     return false;
   }
 }
 
-export async function readJson<T = FixMe>(filePath: string): Promise<T> {
-  const content = await fs.readFile(filePath, 'utf-8');
-  return JSON.parse(content);
-}
-
-export async function writeJson(filePath: string, data: FixMe): Promise<void> {
-  const content = `${JSON.stringify(data, null, 2)}\n`;
-  await fs.writeFile(filePath, content, 'utf-8');
-}
-
-export async function tryReadJson<T = FixMe>(filePath: string, defaultValue: T): Promise<T> {
+export async function dirExists(path: string): Promise<boolean> {
   try {
-    return await readJson<T>(filePath);
+    return await exists(path, { isDirectory: true });
+  } catch {
+    return false;
+  }
+}
+
+export async function tryReadJson<T>(
+  path: string,
+  defaultValue: T,
+): Promise<T> {
+  try {
+    const content = await Deno.readTextFile(path);
+    return JSON.parse(content) as T;
   } catch {
     return defaultValue;
   }
 }
 
-export function normalizePath(p: string): string {
-  return p.replace(/\\/g, '/');
+export async function readJson<T>(path: string): Promise<T> {
+  const content = await Deno.readTextFile(path);
+  return JSON.parse(content) as T;
 }
 
-export function getRelativePath(from: string, to: string): string {
-  return normalizePath(path.relative(from, to));
+export async function writeJson(path: string, value: unknown): Promise<void> {
+  const content = JSON.stringify(value, null, 2);
+  await Deno.writeTextFile(path, content + "\n");
 }
 
-export async function readPackageJson(dir: string): Promise<PackageJson | null> {
-  const pkgPath = path.join(dir, 'package.json');
-  if (!(await fileExists(pkgPath))) {
-    return null;
+export async function findUp(
+  filename: string,
+  startDir: string,
+): Promise<string | null> {
+  let currentDir = startDir;
+
+  while (true) {
+    const candidatePath = `${currentDir}/${filename}`;
+    if (await fileExists(candidatePath)) {
+      return candidatePath;
+    }
+
+    const parentDir = Deno.realPathSync(`${currentDir}/..`);
+    if (parentDir === currentDir) {
+      // Reached root directory
+      return null;
+    }
+    currentDir = parentDir;
   }
-  return readJson<PackageJson>(pkgPath);
-}
-
-export async function readTsConfig(dir: string): Promise<TsConfig | null> {
-  const tsConfigPath = path.join(dir, 'tsconfig.json');
-  if (!(await fileExists(tsConfigPath))) {
-    return null;
-  }
-  return readJson<TsConfig>(tsConfigPath);
-}
-
-export function isWorkspaceDependency(version: string): boolean {
-  return (
-    version === 'workspace:*' ||
-    version === 'workspace:^' ||
-    version === 'workspace:~' ||
-    version.startsWith('workspace:')
-  );
-}
-
-export function sortObjectKeys<T extends Record<string, FixMe>>(obj: T): T {
-  const sorted: FixMe = {};
-  for (const key of Object.keys(obj).sort()) {
-    sorted[key] = obj[key];
-  }
-  return sorted;
 }

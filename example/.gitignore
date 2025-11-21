@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+.yarn/
+
+# Build outputs
+dist/
+*.tsbuildinfo
+.moon/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

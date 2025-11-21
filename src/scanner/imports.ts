@@ -1,36 +1,36 @@
 // Import scanning and analysis for the sync-deps tool
 // Phase 2: Scans TypeScript/JavaScript files to track workspace package usage
+// Deno version using built-in APIs
 
-import { readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
-import { glob } from 'glob';
-import { log } from '../utils/logging';
+import { join, relative } from "@std/path";
+import { expandGlob } from "@std/fs";
+import { log } from "../utils/logging.ts";
 import type {
   ProjectInventory,
   ProjectUsage,
   ProjectUsageRecord,
   SyncConfig,
   UsageRecord,
-} from '../core/types';
+} from "../core/types.ts";
 
 // File extensions to scan for imports
-const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
+const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
 
 // Patterns to exclude from scanning
 const DEFAULT_EXCLUDE_PATTERNS = [
-  '**/node_modules/**',
-  '**/dist/**',
-  '**/.turbo/**',
-  '**/.moon/**',
-  '**/build/**',
-  '**/out/**',
-  '**/coverage/**',
-  '**/.next/**',
-  '**/generated/**',
-  '**/*.test.ts',
-  '**/*.test.tsx',
-  '**/*.spec.ts',
-  '**/*.spec.tsx',
+  "**/node_modules/**",
+  "**/dist/**",
+  "**/.turbo/**",
+  "**/.moon/**",
+  "**/build/**",
+  "**/out/**",
+  "**/coverage/**",
+  "**/.next/**",
+  "**/generated/**",
+  "**/*.test.ts",
+  "**/*.test.tsx",
+  "**/*.spec.ts",
+  "**/*.spec.tsx",
 ];
 
 // Regular expressions for parsing imports
@@ -50,32 +50,65 @@ const IMPORT_PATTERNS = {
   require: /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
 
   // Export from: export ... from 'module.js'
-  exportFrom: /^export\s+(?:type\s+)?(?:\*|\{[^}]*\})\s+from\s+['"]([^'"]+)['"]/gm,
+  exportFrom:
+    /^export\s+(?:type\s+)?(?:\*|\{[^}]*\})\s+from\s+['"]([^'"]+)['"]/gm,
 
   // Type-only export from: export type ... from 'module.js'
-  typeExportFrom: /^export\s+type\s+(?:\*|\{[^}]*\})\s+from\s+['"]([^'"]+)['"]/gm,
+  typeExportFrom:
+    /^export\s+type\s+(?:\*|\{[^}]*\})\s+from\s+['"]([^'"]+)['"]/gm,
 };
+
+/**
+ * Checks if a file should be excluded
+ */
+function shouldExclude(filePath: string): boolean {
+  const normalizedPath = filePath.replace(/\\/g, "/");
+
+  for (const pattern of DEFAULT_EXCLUDE_PATTERNS) {
+    // Convert glob pattern to regex
+    const regexPattern = pattern
+      .replace(/\*\*/g, ".*")
+      .replace(/\*/g, "[^/]*")
+      .replace(/\./g, "\\.");
+
+    if (new RegExp(regexPattern).test(normalizedPath)) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 /**
  * Finds all source files in a project
  */
-async function findSourceFiles(projectRoot: string, verbose: boolean): Promise<string[]> {
-  const patterns = SOURCE_EXTENSIONS.map((ext) => `**/*${ext}`);
+async function findSourceFiles(
+  projectRoot: string,
+  verbose: boolean,
+): Promise<string[]> {
+  const files: string[] = [];
 
   try {
-    const files: string[] = [];
+    for (const ext of SOURCE_EXTENSIONS) {
+      const pattern = join(projectRoot, "**", `*${ext}`);
 
-    for (const pattern of patterns) {
-      const matches = await glob(pattern, {
-        cwd: projectRoot,
-        ignore: DEFAULT_EXCLUDE_PATTERNS,
-        absolute: false,
-      });
-      files.push(...matches);
+      for await (const entry of expandGlob(pattern, { root: projectRoot })) {
+        if (entry.isFile) {
+          const relativePath = relative(projectRoot, entry.path);
+
+          if (!shouldExclude(relativePath)) {
+            files.push(relativePath);
+          }
+        }
+      }
     }
 
     if (verbose && files.length > 0) {
-      log.debug(`Found ${files.length} source files in ${relative(process.cwd(), projectRoot)}`);
+      log.debug(
+        `Found ${files.length} source files in ${
+          relative(Deno.cwd(), projectRoot)
+        }`,
+      );
     }
 
     return files;
@@ -88,14 +121,18 @@ async function findSourceFiles(projectRoot: string, verbose: boolean): Promise<s
 /**
  * Parses a source file and extracts all imports
  */
-function parseFileImports(filePath: string, content: string, verbose: boolean): UsageRecord[] {
+function parseFileImports(
+  filePath: string,
+  content: string,
+  verbose: boolean,
+): UsageRecord[] {
   const records: UsageRecord[] = [];
   const seenSpecifiers = new Set<string>();
 
   // Helper to add unique records
   const addRecord = (specifier: string, isTypeOnly: boolean) => {
     // Skip relative imports
-    if (specifier.startsWith('.')) {
+    if (specifier.startsWith(".")) {
       return;
     }
 
@@ -104,7 +141,7 @@ function parseFileImports(filePath: string, content: string, verbose: boolean): 
     if (!seenSpecifiers.has(key)) {
       seenSpecifiers.add(key);
       records.push({
-        dependencyId: '', // Will be filled later
+        dependencyId: "", // Will be filled later
         specifier,
         isTypeOnly,
         sourceFile: filePath,
@@ -191,8 +228,8 @@ function resolveWorkspacePackage(
   // Check if import should be ignored
   if (
     config.ignoreImports?.some((pattern) => {
-      if (pattern.includes('*')) {
-        const regex = new RegExp(`^${pattern.replace(/\*/g, '.*')}$`);
+      if (pattern.includes("*")) {
+        const regex = new RegExp(`^${pattern.replace(/\*/g, ".*")}$`);
         return regex.test(specifier);
       }
       return specifier === pattern || specifier.startsWith(`${pattern}/`);
@@ -233,7 +270,7 @@ export async function scanProjectImports(
   const workspacePackageNames = Object.keys(inventory.projects);
   const workspacePackages = new Set(workspacePackageNames); // Keep as Set for efficient lookup
 
-  log.step('Scanning imports in all projects...');
+  log.step("Scanning imports in all projects...");
 
   let totalFiles = 0;
   let totalImports = 0;
@@ -266,7 +303,7 @@ export async function scanProjectImports(
       const filePath = join(project.root, file);
 
       try {
-        const content = readFileSync(filePath, 'utf-8');
+        const content = await Deno.readTextFile(filePath);
         const imports = parseFileImports(file, content, verbose);
 
         // Resolve each import to a workspace package
@@ -307,13 +344,18 @@ export async function scanProjectImports(
     }
 
     // Only add to usage map if project has dependencies
-    if (projectUsage.dependencies.length > 0 || projectUsage.typeOnlyDependencies.length > 0) {
+    if (
+      projectUsage.dependencies.length > 0 ||
+      projectUsage.typeOnlyDependencies.length > 0
+    ) {
       usage[projectId] = projectUsage;
 
       if (verbose) {
         const runtime = projectUsage.dependencies.length;
         const typeOnly = projectUsage.typeOnlyDependencies.length;
-        log.debug(`  Found ${runtime} runtime deps, ${typeOnly} type-only deps`);
+        log.debug(
+          `  Found ${runtime} runtime deps, ${typeOnly} type-only deps`,
+        );
       }
     }
   }
@@ -349,7 +391,7 @@ export function analyzeImportUsage(
     return;
   }
 
-  log.section('Import Analysis');
+  log.section("Import Analysis");
 
   // Calculate statistics
   const stats = {
@@ -366,7 +408,9 @@ export function analyzeImportUsage(
     stats.totalTypeOnlyDependencies += record.typeOnlyDependencies.length;
 
     // Track package usage counts
-    for (const dep of [...record.dependencies, ...record.typeOnlyDependencies]) {
+    for (
+      const dep of [...record.dependencies, ...record.typeOnlyDependencies]
+    ) {
       stats.mostUsedPackages[dep] = (stats.mostUsedPackages[dep] || 0) + 1;
       stats.unusedPackages.delete(dep);
     }
@@ -376,10 +420,12 @@ export function analyzeImportUsage(
   }
 
   // Report statistics
-  log.info('Import Statistics:');
+  log.info("Import Statistics:");
   log.info(`  - Projects with imports: ${stats.totalProjects}`);
   log.info(`  - Total runtime dependencies: ${stats.totalDependencies}`);
-  log.info(`  - Total type-only dependencies: ${stats.totalTypeOnlyDependencies}`);
+  log.info(
+    `  - Total type-only dependencies: ${stats.totalTypeOnlyDependencies}`,
+  );
 
   // Show most used packages
   const sortedPackages = Object.entries(stats.mostUsedPackages)
@@ -387,7 +433,7 @@ export function analyzeImportUsage(
     .slice(0, 10);
 
   if (sortedPackages.length > 0) {
-    log.info('  - Most used packages:');
+    log.info("  - Most used packages:");
     for (const [pkg, count] of sortedPackages) {
       log.info(`      ${pkg}: used by ${count} projects`);
     }
@@ -399,7 +445,7 @@ export function analyzeImportUsage(
     if (verbose) {
       for (const pkg of stats.unusedPackages) {
         const project = inventory.projects[pkg];
-        if (project && project.workspaceType === 'shared-package') {
+        if (project && project.workspaceType === "shared-package") {
           log.debug(`      ${pkg}`);
         }
       }

@@ -1,87 +1,157 @@
 // Phase 0: Configuration loading
+// Deno version
 
-import * as path from 'node:path';
-import type { RepoManager } from '../core/manager';
-import type { SyncConfig } from '../core/types';
-import { fileExists, tryReadJson } from '../utils/files';
+import { join } from "@std/path";
+import { parse as parseJsonc } from "@std/jsonc";
+import type { RepoManager } from "../core/manager.ts";
+import type { SyncConfig } from "../core/types.ts";
+import { fileExists } from "../utils/files.ts";
+import { SyncConfigSchema } from "./schema.ts";
 
-const DEFAULT_CONFIG: SyncConfig = {
-  workspaceTypes: {
-    'apps/*': {
-      type: 'app',
-      enforceNamePrefix: false,
-    },
-    'packages/*': {
-      type: 'shared-package',
-      enforceNamePrefix: '@billie-coop/',
-    },
-    'websites/*': {
-      type: 'app',
-      enforceNamePrefix: false,
-    },
-  },
-  defaultDependencies: ['@billie-coop/ts-utils'],
-  ignoreProjects: [],
-  ignoreImports: [],
-  tsconfig: {
-    preserveOutDir: true,
-    typeOnlyInDevDependencies: true,
-  },
-};
-
-export async function loadSyncConfig(manager: RepoManager): Promise<SyncConfig> {
-  const logger = manager.getLogger();
-
-  // Try to find config file
-  const configPath = manager.getConfigPath() || path.join(manager.root, 'sync-deps.config.json');
-
-  logger.debug(`Looking for config at: ${configPath}`);
-
-  if (!(await fileExists(configPath))) {
-    logger.debug('No config file found, using defaults');
-    return DEFAULT_CONFIG;
+async function findConfigFile(
+  rootDir: string,
+  customPath?: string,
+): Promise<string | null> {
+  // If custom path provided, use it
+  if (customPath) {
+    if (await fileExists(customPath)) {
+      return customPath;
+    }
+    return null;
   }
 
-  logger.step(`Loading config from ${path.basename(configPath)}`);
+  // Search for config files in order of preference
+  const configNames = [
+    "serenity-now.config.jsonc",
+    "serenity-now.config.json",
+  ];
 
-  const userConfig = await tryReadJson<SyncConfig>(configPath, {});
-
-  // Merge with defaults
-  const config: SyncConfig = {
-    ...DEFAULT_CONFIG,
-    ...userConfig,
-    workspaceTypes: {
-      ...DEFAULT_CONFIG.workspaceTypes,
-      ...userConfig.workspaceTypes,
-    },
-    tsconfig: {
-      ...DEFAULT_CONFIG.tsconfig,
-      ...userConfig.tsconfig,
-    },
-  };
-
-  // Handle deprecated enforceNamePrefix
-  if (userConfig.enforceNamePrefix && !userConfig.workspaceTypes) {
-    logger.warn('enforceNamePrefix is deprecated. Use workspaceTypes configuration instead.');
-  }
-
-  // Validate and warn about unknown fields
-  const knownFields = new Set([
-    'workspaceTypes',
-    'enforceNamePrefix', // Keep for backwards compatibility
-    'defaultDependencies',
-    'ignoreProjects',
-    'ignoreImports',
-    'tsconfig',
-  ]);
-
-  for (const key of Object.keys(userConfig)) {
-    if (!knownFields.has(key)) {
-      logger.warn(`Unknown config field: ${key}`);
+  for (const name of configNames) {
+    const path = join(rootDir, name);
+    if (await fileExists(path)) {
+      return path;
     }
   }
 
-  logger.debug(`Config loaded: ${JSON.stringify(config, null, 2)}`);
+  return null;
+}
+
+async function createConfigWithPrompt(rootDir: string): Promise<void> {
+  const configPath = join(rootDir, "serenity-now.config.jsonc");
+
+  const configTemplate = `{
+  // Serenity Now! Configuration
+  // This file configures how dependencies are synchronized across your monorepo
+
+  // Define workspace types and their configurations
+  "workspaceTypes": {
+    // Example: Match all projects in apps/ directory
+    "apps/*": {
+      "type": "app",  // "app" or "shared-package"
+      // Optional: Categorize further (mobile, db, website, etc.)
+      // "subType": "website",
+
+      // Optional: Enforce package name prefix
+      // "enforceNamePrefix": "@mycompany/",
+
+      // Optional: Template for package.json fields
+      // "packageJsonTemplate": {
+      //   "private": true
+      // },
+
+      // Optional: Template for tsconfig.json
+      // "tsconfigTemplate": {
+      //   "extends": "../../tsconfig.base.json"
+      // }
+    },
+
+    // Example: Match all shared packages
+    "packages/*": {
+      "type": "shared-package",
+      "enforceNamePrefix": "@mycompany/"
+    }
+  },
+
+  // Optional: Dependencies to always include in every project
+  "defaultDependencies": [],
+
+  // Optional: Projects to ignore during scanning
+  "ignoreProjects": [],
+
+  // Optional: Import patterns to ignore
+  "ignoreImports": [
+    // Example: "react", "node:*"
+  ],
+
+  // Optional: TypeScript configuration
+  "tsconfig": {
+    // Enable incremental compilation with project references (recommended)
+    // "incremental": true  // Default: true
+  }
+}`;
+
+  console.log("\n📝 No configuration file found!");
+  console.log(
+    `Creating ${configPath.split("/").pop()} with helpful comments...`,
+  );
+
+  await Deno.writeTextFile(configPath, configTemplate);
+
+  console.log("\n✅ Configuration file created!");
+  console.log(
+    "Please edit the file to match your monorepo structure and run again.",
+  );
+  console.log(`\nFile location: ${configPath}`);
+}
+
+export async function loadSyncConfig(
+  manager: RepoManager,
+): Promise<SyncConfig> {
+  const logger = manager.getLogger();
+
+  // Try to find config file
+  const configPath = await findConfigFile(
+    manager.root,
+    manager.getConfigPath(),
+  );
+
+  if (!configPath) {
+    await createConfigWithPrompt(manager.root);
+    Deno.exit(0);
+  }
+
+  logger.step(`Loading config from ${configPath.split("/").pop()}`);
+
+  // Read file content
+  const configContent = await Deno.readTextFile(configPath);
+
+  // Parse as JSONC (handles both JSON and JSONC)
+  const rawConfig = parseJsonc(configContent);
+
+  // Validate config with Zod schema
+  const parseResult = SyncConfigSchema.safeParse(rawConfig);
+
+  if (!parseResult.success) {
+    logger.error("Configuration validation failed:");
+    for (const issue of parseResult.error.issues) {
+      const path = issue.path.length > 0 ? `${issue.path.join(".")}: ` : "";
+      logger.error(`  ${path}${issue.message}`);
+    }
+    throw new Error("Invalid configuration format");
+  }
+
+  const config = parseResult.data as SyncConfig;
+
+  // Handle deprecated enforceNamePrefix
+  if (config.enforceNamePrefix && !config.workspaceTypes) {
+    logger.warn(
+      "enforceNamePrefix is deprecated. Use workspaceTypes configuration instead.",
+    );
+  }
+
+  logger.debug(
+    `Config loaded and validated: ${JSON.stringify(config, null, 2)}`,
+  );
 
   return config;
 }

@@ -1,10 +1,10 @@
 // Core orchestrator class for the sync-deps tool
 
-import { loadSyncConfig } from '../config/loader';
-import { emitChanges } from '../emitter/emit';
-import { analyzeGraph, resolveGraph } from '../resolver/graph';
-import { analyzeImportUsage, scanProjectImports } from '../scanner/imports';
-import { Logger } from '../utils/logging';
+import { loadSyncConfig } from "../config/loader.ts";
+import { emitChanges } from "../emitter/emit.ts";
+import { analyzeGraph, resolveGraph } from "../resolver/graph.ts";
+import { analyzeImportUsage, scanProjectImports } from "../scanner/imports.ts";
+import { Logger } from "../utils/logging.ts";
 import type {
   EmitResult,
   EntryPointInfo,
@@ -15,9 +15,9 @@ import type {
   ResolvedGraph,
   SyncConfig,
   TsConfig,
-} from './types';
-import { fileExists, readJson, writeJson } from '../utils/files';
-import { discoverWorkspaceProjects } from '../scanner/workspace';
+} from "./types.ts";
+import { fileExists, readJson, writeJson } from "../utils/files.ts";
+import { discoverWorkspace } from "../scanner/workspace.ts";
 
 export class RepoManager {
   private rootDir: string;
@@ -27,10 +27,6 @@ export class RepoManager {
   private failOnStale: boolean;
   private logger: Logger;
   private config?: SyncConfig;
-
-  // Caches
-  private packageJsonCache = new Map<string, PackageJson>();
-  private tsConfigCache = new Map<string, TsConfig>();
 
   constructor(options: RepoManagerOptions) {
     this.rootDir = options.rootDir;
@@ -43,24 +39,24 @@ export class RepoManager {
 
   // Phase hooks (to be implemented by phase modules)
   async loadConfig(): Promise<SyncConfig> {
-    this.logger.phase('Loading Configuration');
+    this.logger.phase("Loading Configuration");
     this.config = await loadSyncConfig(this);
     return this.config;
   }
 
   async discoverWorkspace(): Promise<ProjectInventory> {
     if (!this.config) {
-      throw new Error('Config must be loaded before workspace discovery');
+      throw new Error("Config must be loaded before workspace discovery");
     }
-    this.logger.phase('Discovering Workspace');
-    return discoverWorkspaceProjects(this, this.config);
+    this.logger.phase("Discovering Workspace");
+    return await discoverWorkspace(this, this.config);
   }
 
   async scanImports(inventory: ProjectInventory): Promise<ProjectUsage> {
     if (!this.config) {
-      throw new Error('Config must be loaded before import scanning');
+      throw new Error("Config must be loaded before import scanning");
     }
-    this.logger.phase('Scanning Imports');
+    this.logger.phase("Scanning Imports");
 
     const usage = await scanProjectImports(inventory, this.config, {
       verbose: this.verbose,
@@ -74,11 +70,14 @@ export class RepoManager {
     return usage;
   }
 
-  async resolveGraph(inventory: ProjectInventory, usage: ProjectUsage): Promise<ResolvedGraph> {
+  async resolveGraph(
+    inventory: ProjectInventory,
+    usage: ProjectUsage,
+  ): Promise<ResolvedGraph> {
     if (!this.config) {
-      throw new Error('Config must be loaded before graph resolution');
+      throw new Error("Config must be loaded before graph resolution");
     }
-    this.logger.phase('Resolving Dependency Graph');
+    this.logger.phase("Resolving Dependency Graph");
 
     const graph = await resolveGraph(inventory, usage, this.config, {
       verbose: this.verbose,
@@ -92,15 +91,19 @@ export class RepoManager {
     return graph;
   }
 
-  async emitChanges(graph: ResolvedGraph): Promise<EmitResult> {
+  async emitChanges(
+    graph: ResolvedGraph,
+    inventory: ProjectInventory,
+  ): Promise<EmitResult> {
     if (!this.config) {
-      throw new Error('Config must be loaded before emitting changes');
+      throw new Error("Config must be loaded before emitting changes");
     }
-    this.logger.phase('Emitting Changes');
+    this.logger.phase("Emitting Changes");
 
-    const result = await emitChanges(graph, this.config, {
+    const result = await emitChanges(graph, inventory, this.config, {
       dryRun: this.dryRun,
       verbose: this.verbose,
+      rootDir: this.rootDir,
     });
 
     return result;
@@ -137,7 +140,7 @@ export class RepoManager {
 
   // File operations
   async readJson<T>(filePath: string): Promise<T> {
-    return readJson<T>(filePath);
+    return await readJson<T>(filePath);
   }
 
   async writeJson(filePath: string, value: unknown): Promise<void> {
@@ -145,34 +148,28 @@ export class RepoManager {
       this.logger.debug(`[dry-run] Would write to ${filePath}`);
       return;
     }
-    return writeJson(filePath, value);
+    return await writeJson(filePath, value);
   }
 
   async fileExists(filePath: string): Promise<boolean> {
-    return fileExists(filePath);
+    return await fileExists(filePath);
   }
 
   // Cache accessors
-  async getPackageJson(projectId: string): Promise<PackageJson | null> {
-    if (!this.packageJsonCache.has(projectId)) {
-      // Will need project root from inventory to implement properly
-      return null;
-    }
-    return this.packageJsonCache.get(projectId) ?? null;
+  getPackageJson(_projectId: string): PackageJson | null {
+    // Placeholder - will be implemented when we have inventory
+    return null;
   }
 
-  async getTsConfig(projectId: string): Promise<TsConfig | null> {
-    if (!this.tsConfigCache.has(projectId)) {
-      // Will need project root from inventory to implement properly
-      return null;
-    }
-    return this.tsConfigCache.get(projectId) ?? null;
+  getTsConfig(_projectId: string): TsConfig | null {
+    // Placeholder - will be implemented when we have inventory
+    return null;
   }
 
-  async getDependencyEntry(
+  getDependencyEntry(
     _projectId: string,
     _dependencyId: string,
-  ): Promise<EntryPointInfo | null> {
+  ): EntryPointInfo | null {
     // Placeholder - will be implemented when we have inventory
     return null;
   }

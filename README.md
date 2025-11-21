@@ -2,19 +2,27 @@
 
 > SERENITY NOW! Automatic dependency management for TypeScript monorepos
 
-A TypeScript-first monorepo dependency synchronization tool that keeps your workspace dependencies in perfect harmony. No more manual dependency management, no more version mismatches, no more insanity.
+A TypeScript-first monorepo dependency synchronization tool that keeps your
+workspace dependencies in perfect harmony. No more manual dependency management,
+no more version mismatches, no more insanity.
 
 ## What It Does
 
-`serenity-now` scans your TypeScript monorepo to understand the actual import relationships between packages, then automatically synchronizes your `package.json` files and `tsconfig.json` project references to match reality.
+`serenity-now` scans your TypeScript monorepo to understand the actual import
+relationships between packages, then automatically synchronizes your
+`package.json` files and `tsconfig.json` project references to match reality.
 
-It's like having a very detail-oriented assistant who never sleeps and loves organizing dependencies.
+It's like having a very detail-oriented assistant who never sleeps and loves
+organizing dependencies.
 
 ## Features
 
-- 🔍 **AST-based import scanning** - Understands all import types (static, dynamic, type-only, require, re-export)
-- 📦 **Automatic dependency synchronization** - Updates package.json files based on actual usage
-- 🔗 **TypeScript project references** - Manages tsconfig.json references and path mappings
+- 🔍 **AST-based import scanning** - Understands all import types (static,
+  dynamic, type-only, require, re-export)
+- 📦 **Automatic dependency synchronization** - Updates package.json files based
+  on actual usage
+- 🔗 **TypeScript project references** - Manages tsconfig.json references and
+  path mappings
 - 🎯 **Smart defaults** - Zero-config for common monorepo setups
 - ⚡ **Fast** - Optimized for large monorepos
 - 🔧 **Configurable** - Customize behavior for your specific needs
@@ -74,6 +82,7 @@ Create a `serenity-now.json` file in your monorepo root:
 ### Zero Config Mode
 
 If no configuration is provided, `serenity-now` will:
+
 - Auto-detect your organization prefix from existing packages
 - Use workspace patterns from your root `package.json`
 - Detect your package manager (yarn, npm, pnpm)
@@ -97,13 +106,15 @@ If no configuration is provided, `serenity-now` will:
 
 ## Why "serenity-now"?
 
-Because managing monorepo dependencies manually will make you want to scream "SERENITY NOW!" at your computer. This tool brings that serenity, now.
+Because managing monorepo dependencies manually will make you want to scream
+"SERENITY NOW!" at your computer. This tool brings that serenity, now.
 
-*"These dependencies are real... and they're SPECTACULAR!"*
+_"These dependencies are real... and they're SPECTACULAR!"_
 
 ## Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
+for details.
 
 ## License
 

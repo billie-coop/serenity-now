@@ -1,9 +1,9 @@
 // Core type definitions for the sync-deps tool
 
 // Type aliases for any types (following existing pattern in codebase)
-// biome-ignore lint/suspicious/noExplicitAny: Intentional type alias
+// deno-lint-ignore no-explicit-any
 export type FixMe = any;
-// biome-ignore lint/suspicious/noExplicitAny: Intentional type alias
+// deno-lint-ignore no-explicit-any
 export type NoFix = any;
 
 export interface RepoManagerOptions {
@@ -15,18 +15,18 @@ export interface RepoManagerOptions {
 }
 
 export type WorkspaceSubType =
-  | 'mobile'
-  | 'db'
-  | 'marketing'
-  | 'plugin'
-  | 'ui'
-  | 'website'
-  | 'library'
-  | 'other'
-  | 'unknown';
+  | "mobile"
+  | "db"
+  | "marketing"
+  | "plugin"
+  | "ui"
+  | "website"
+  | "library"
+  | "other"
+  | "unknown";
 
 export interface WorkspaceTypeConfig {
-  type: 'app' | 'shared-package';
+  type: "app" | "shared-package";
   subType?: WorkspaceSubType;
   enforceNamePrefix?: string | false;
   packageJsonTemplate?: Partial<PackageJson>;
@@ -43,6 +43,7 @@ export interface SyncConfig {
   tsconfig?: {
     preserveOutDir?: boolean;
     typeOnlyInDevDependencies?: boolean;
+    incremental?: boolean; // Enable TypeScript incremental compilation (default: true)
   };
 }
 
@@ -52,7 +53,7 @@ export interface ProjectInfo {
   relativeRoot: string; // Relative to repo root
   packageJson: PackageJson; // Cached content
   tsconfigPath?: string; // If exists
-  workspaceType: 'app' | 'shared-package' | 'unknown';
+  workspaceType: "app" | "shared-package" | "unknown";
   workspaceSubType: WorkspaceSubType;
   workspaceConfig?: WorkspaceTypeConfig; // The config that matched this project
   isPrivate: boolean;
@@ -85,7 +86,7 @@ export interface ProjectUsage {
 export interface ResolvedDependency {
   dependency: ProjectInfo;
   entryPoint: EntryPointInfo;
-  reason: 'import' | 'tsconfig-reference' | 'default';
+  reason: "import" | "tsconfig-reference" | "default";
   sourceFiles: string[];
 }
 
@@ -140,10 +141,13 @@ export interface TsConfig {
     outDir?: string;
     rootDir?: string;
     paths?: Record<string, string[]>;
+    composite?: boolean;
+    incremental?: boolean;
     [key: string]: FixMe;
   };
   include?: string[];
   exclude?: string[];
+  files?: string[];
   references?: Array<{ path: string }>;
 }
 

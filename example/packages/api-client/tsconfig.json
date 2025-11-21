@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": [
+    "src/**/*"
+  ],
+  "compilerOptions": {
+    "outDir": "dist",
+    "paths": {
+      "@example/utils": [
+        "../utils/src/index.ts"
+      ],
+      "@example/utils/*": [
+        "../utils/src/*"
+      ]
+    }
+  },
+  "references": [
+    {
+      "path": "../utils"
+    }
+  ]
+}

@@ -1,18 +1,20 @@
 // Emit changes to package.json and tsconfig.json files
 // Phase 4: Updates configurations based on resolved dependency graph
+// Deno version
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
-import { log } from '../utils/logging';
+import { dirname, join, relative } from "@std/path";
+import { log } from "../utils/logging.ts";
+import { updateRootTsConfig } from "./root-tsconfig.ts";
 import type {
   EmitResult,
   PackageJson,
+  ProjectInventory,
   ResolvedGraph,
   ResolvedProject,
   StaleDependencies,
   SyncConfig,
   TsConfig,
-} from '../core/types';
+} from "../core/types.ts";
 
 // Define MoonYml interface (temporary - will be removed once we fully transition to new tooling)
 interface MoonYml {
@@ -27,7 +29,7 @@ interface MoonYml {
  * NOTE: This is temporary - will be removed once we fully transition from Moon to the new tooling
  */
 function parseMoonYml(content: string): MoonYml {
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   const result: MoonYml = {};
   let currentKey: string | null = null;
   let currentArray: string[] = [];
@@ -36,34 +38,34 @@ function parseMoonYml(content: string): MoonYml {
     const trimmed = line.trim();
 
     // Skip empty lines and comments
-    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (!trimmed || trimmed.startsWith("#")) continue;
 
     // Handle array items
-    if (trimmed.startsWith('- ')) {
-      if (currentKey === 'dependsOn') {
+    if (trimmed.startsWith("- ")) {
+      if (currentKey === "dependsOn") {
         const value = trimmed.slice(2).trim();
         // Remove quotes if present
-        currentArray.push(value.replace(/^['"]|['"]$/g, ''));
+        currentArray.push(value.replace(/^['"]|['"]$/g, ""));
       }
       continue;
     }
 
     // Save previous array if we're moving to a new key
-    if (currentKey === 'dependsOn' && currentArray.length > 0) {
+    if (currentKey === "dependsOn" && currentArray.length > 0) {
       result.dependsOn = currentArray;
       currentArray = [];
     }
 
     // Handle key-value pairs
-    const colonIndex = line.indexOf(':');
+    const colonIndex = line.indexOf(":");
     if (colonIndex > 0) {
       currentKey = line.slice(0, colonIndex).trim();
       const value = line.slice(colonIndex + 1).trim();
 
       if (value) {
         // Remove quotes if present
-        result[currentKey] = value.replace(/^['"]|['"]$/g, '');
-      } else if (currentKey === 'dependsOn') {
+        result[currentKey] = value.replace(/^['"]|['"]$/g, "");
+      } else if (currentKey === "dependsOn") {
         // Start collecting array items
         currentArray = [];
       }
@@ -71,7 +73,7 @@ function parseMoonYml(content: string): MoonYml {
   }
 
   // Save final array if exists
-  if (currentKey === 'dependsOn' && currentArray.length > 0) {
+  if (currentKey === "dependsOn" && currentArray.length > 0) {
     result.dependsOn = currentArray;
   }
 
@@ -88,28 +90,28 @@ function formatMoonYml(moonYml: MoonYml): string {
   // Always write $schema first if present
   if (moonYml.$schema) {
     lines.push(`$schema: '${moonYml.$schema}'`);
-    lines.push('');
+    lines.push("");
   }
 
   // Write language if present
   if (moonYml.language) {
     lines.push(`language: '${moonYml.language}'`);
-    lines.push('');
+    lines.push("");
   }
 
   // Write dependsOn array
   if (moonYml.dependsOn && moonYml.dependsOn.length > 0) {
-    lines.push('dependsOn:');
+    lines.push("dependsOn:");
     for (const dep of moonYml.dependsOn) {
       lines.push(`  - '${dep}'`);
     }
-    lines.push('');
+    lines.push("");
   }
 
   // Write any other fields that we're preserving
   for (const [key, value] of Object.entries(moonYml)) {
-    if (key !== '$schema' && key !== 'language' && key !== 'dependsOn') {
-      if (typeof value === 'string') {
+    if (key !== "$schema" && key !== "language" && key !== "dependsOn") {
+      if (typeof value === "string") {
         lines.push(`${key}: '${value}'`);
       } else if (value !== undefined) {
         // For now, just stringify other types
@@ -119,7 +121,7 @@ function formatMoonYml(moonYml: MoonYml): string {
   }
 
   // Ensure we end with a newline
-  return `${lines.join('\n').trimEnd()}\n`;
+  return `${lines.join("\n").trimEnd()}\n`;
 }
 
 /**
@@ -142,12 +144,14 @@ function updateMoonYml(
   // Build new dependsOn array from our resolved graph
   // Moon uses package names without the @billie-coop/ prefix
   const allDeps = Object.keys(project.dependencies).map((depId) =>
-    depId.replace('@billie-coop/', ''),
+    depId.replace("@billie-coop/", "")
   );
 
   // Separate default dependencies from regular ones
   const defaultDepsSet = new Set(
-    (config.defaultDependencies || []).map((d) => d.replace('@billie-coop/', '')),
+    (config.defaultDependencies || []).map((d) =>
+      d.replace("@billie-coop/", "")
+    ),
   );
 
   const defaultDeps: string[] = [];
@@ -168,7 +172,8 @@ function updateMoonYml(
 
   // Check if anything changed
   const currentDependsOn = currentMoonYml.dependsOn || [];
-  const changed = JSON.stringify(currentDependsOn) !== JSON.stringify(newDependsOn);
+  const changed =
+    JSON.stringify(currentDependsOn) !== JSON.stringify(newDependsOn);
 
   // Update the dependsOn field
   if (newDependsOn.length > 0) {
@@ -206,7 +211,7 @@ function detectStaleDependencies(
 
   for (const [depName, version] of Object.entries(allCurrentDeps)) {
     // Only check workspace dependencies
-    if (version.includes('workspace:') && depName.startsWith('@billie-coop/')) {
+    if (version.includes("workspace:") && depName.startsWith("@billie-coop/")) {
       if (!resolvedDeps.has(depName)) {
         stale.packageJsonDeps.push(depName);
       }
@@ -217,14 +222,17 @@ function detectStaleDependencies(
   if (currentTsconfig?.compilerOptions?.paths) {
     for (const pathKey of Object.keys(currentTsconfig.compilerOptions.paths)) {
       // Extract package name from path (e.g., "@billie-coop/ui" or "@billie-coop/ui/*")
-      const packageName = pathKey.replace(/\/\*$/, '');
+      const packageName = pathKey.replace(/\/\*$/, "");
 
       // Only check workspace packages
-      if (packageName.startsWith('@billie-coop/')) {
+      if (packageName.startsWith("@billie-coop/")) {
         // Skip the wildcard entry if we have the base entry
-        if (pathKey.endsWith('/*')) {
+        if (pathKey.endsWith("/*")) {
           const baseName = packageName;
-          if (!resolvedDeps.has(baseName) && currentTsconfig.compilerOptions.paths[baseName]) {
+          if (
+            !resolvedDeps.has(baseName) &&
+            currentTsconfig.compilerOptions.paths[baseName]
+          ) {
             continue; // Will be handled by base entry
           }
         }
@@ -252,7 +260,7 @@ function detectStaleDependencies(
           if (
             ref.path === relativePath ||
             ref.path === `./${relativePath}` ||
-            ref.path === `../${dep.dependency.id.replace('@billie-coop/', '')}`
+            ref.path === `../${dep.dependency.id.replace("@billie-coop/", "")}`
           ) {
             isStale = false;
             break;
@@ -272,9 +280,13 @@ function detectStaleDependencies(
 /**
  * Creates a diff string showing changes
  */
-function createDiff(original: string, updated: string, filePath: string): string {
-  const originalLines = original.split('\n');
-  const updatedLines = updated.split('\n');
+function createDiff(
+  original: string,
+  updated: string,
+  filePath: string,
+): string {
+  const originalLines = original.split("\n");
+  const updatedLines = updated.split("\n");
 
   let diff = `--- ${filePath}\n+++ ${filePath} (updated)\n`;
 
@@ -284,18 +296,22 @@ function createDiff(original: string, updated: string, filePath: string): string
   let changeStart = 0;
 
   for (let i = 0; i < maxLines; i++) {
-    const origLine = originalLines[i] || '';
-    const newLine = updatedLines[i] || '';
+    const origLine = originalLines[i] || "";
+    const newLine = updatedLines[i] || "";
 
     if (origLine !== newLine) {
       if (!inChange) {
         inChange = true;
         changeStart = Math.max(0, i - 2);
-        diff += `@@ -${changeStart + 1},${Math.min(7, originalLines.length - changeStart)} +${changeStart + 1},${Math.min(7, updatedLines.length - changeStart)} @@\n`;
+        diff += `@@ -${changeStart + 1},${
+          Math.min(7, originalLines.length - changeStart)
+        } +${changeStart + 1},${
+          Math.min(7, updatedLines.length - changeStart)
+        } @@\n`;
 
         // Add context lines before
         for (let j = changeStart; j < i; j++) {
-          diff += ` ${originalLines[j] || ''}\n`;
+          diff += ` ${originalLines[j] || ""}\n`;
         }
       }
 
@@ -311,7 +327,7 @@ function createDiff(original: string, updated: string, filePath: string): string
       // Check if we should end the change block
       let hasMoreChanges = false;
       for (let j = i + 1; j < maxLines && j < i + 3; j++) {
-        if ((originalLines[j] || '') !== (updatedLines[j] || '')) {
+        if ((originalLines[j] || "") !== (updatedLines[j] || "")) {
           hasMoreChanges = true;
           break;
         }
@@ -329,7 +345,10 @@ function createDiff(original: string, updated: string, filePath: string): string
 /**
  * Deep merge two objects, with source values taking precedence
  */
-function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial<T>): T {
+function deepMerge<T extends Record<string, unknown>>(
+  target: T,
+  source: Partial<T>,
+): T {
   const result = { ...target };
 
   for (const key in source) {
@@ -341,10 +360,10 @@ function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial
     // If both are objects (and not arrays), merge recursively
     if (
       sourceValue &&
-      typeof sourceValue === 'object' &&
+      typeof sourceValue === "object" &&
       !Array.isArray(sourceValue) &&
       targetValue &&
-      typeof targetValue === 'object' &&
+      typeof targetValue === "object" &&
       !Array.isArray(targetValue)
     ) {
       result[key] = deepMerge(
@@ -363,11 +382,14 @@ function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial
 /**
  * Substitute template variables like {{projectDir}} with actual values
  */
-function substituteTemplateVars(template: unknown, vars: Record<string, string>): unknown {
-  if (typeof template === 'string') {
+function substituteTemplateVars(
+  template: unknown,
+  vars: Record<string, string>,
+): unknown {
+  if (typeof template === "string") {
     let result = template;
     for (const [key, value] of Object.entries(vars)) {
-      result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+      result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), value);
     }
     return result;
   }
@@ -376,7 +398,7 @@ function substituteTemplateVars(template: unknown, vars: Record<string, string>)
     return template.map((item) => substituteTemplateVars(item, vars));
   }
 
-  if (template && typeof template === 'object') {
+  if (template && typeof template === "object") {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(template)) {
       result[key] = substituteTemplateVars(value, vars);
@@ -403,10 +425,12 @@ function updatePackageJson(
     const template = project.project.workspaceConfig.packageJsonTemplate;
 
     // Extract project directory name from relativeRoot (e.g., "apps/plantsome-mobile" -> "plantsome-mobile")
-    const projectDir = project.project.relativeRoot.split('/').pop() || '';
+    const projectDir = project.project.relativeRoot.split("/").pop() || "";
 
     // Substitute template variables
-    const substituted = substituteTemplateVars(template, { projectDir }) as Partial<PackageJson>;
+    const substituted = substituteTemplateVars(template, {
+      projectDir,
+    }) as Partial<PackageJson>;
 
     // Merge template with current package.json (template values take precedence for non-dependency fields)
     updated = deepMerge(updated, substituted);
@@ -416,15 +440,19 @@ function updatePackageJson(
   const newDeps: Record<string, string> = {};
 
   // First, preserve non-workspace dependencies
-  for (const [name, version] of Object.entries(currentPackageJson.dependencies || {})) {
-    if (!version.includes('workspace:')) {
+  for (
+    const [name, version] of Object.entries(
+      currentPackageJson.dependencies || {},
+    )
+  ) {
+    if (!version.includes("workspace:")) {
       newDeps[name] = version;
     }
   }
 
   // Now add all our resolved workspace dependencies
   for (const [depId, _dep] of Object.entries(project.dependencies)) {
-    newDeps[depId] = 'workspace:*';
+    newDeps[depId] = "workspace:*";
   }
 
   // Sort alphabetically
@@ -452,7 +480,8 @@ function updatePackageJson(
 
   // Check if ANYTHING changed (not just dependencies)
   // This ensures template fields (scripts, files, etc.) get enforced unconditionally
-  const changed = JSON.stringify(currentPackageJson) !== JSON.stringify(updated);
+  const changed =
+    JSON.stringify(currentPackageJson) !== JSON.stringify(updated);
 
   return { updated, changed };
 }
@@ -464,6 +493,7 @@ function updatePackageJson(
 function updateTsConfig(
   project: ResolvedProject,
   currentTsconfig: TsConfig | null,
+  config: SyncConfig,
 ): { updated: TsConfig; changed: boolean } | null {
   if (!currentTsconfig) {
     return null;
@@ -476,10 +506,12 @@ function updateTsConfig(
     const template = project.project.workspaceConfig.tsconfigTemplate;
 
     // Extract project directory name from relativeRoot (e.g., "apps/plantsome-mobile" -> "plantsome-mobile")
-    const projectDir = project.project.relativeRoot.split('/').pop() || '';
+    const projectDir = project.project.relativeRoot.split("/").pop() || "";
 
     // Substitute template variables
-    const substituted = substituteTemplateVars(template, { projectDir }) as Partial<TsConfig>;
+    const substituted = substituteTemplateVars(template, {
+      projectDir,
+    }) as Partial<TsConfig>;
 
     // Merge template with current tsconfig (template values take precedence for non-path/reference fields)
     updated = deepMerge(updated, substituted);
@@ -489,8 +521,12 @@ function updateTsConfig(
   const newPaths: Record<string, string[]> = {};
 
   // First, preserve non-workspace paths
-  for (const [path, targets] of Object.entries(currentTsconfig.compilerOptions?.paths || {})) {
-    if (!path.startsWith('@billie-coop/')) {
+  for (
+    const [path, targets] of Object.entries(
+      currentTsconfig.compilerOptions?.paths || {},
+    )
+  ) {
+    if (!path.startsWith("@billie-coop/")) {
       newPaths[path] = targets;
     }
   }
@@ -500,17 +536,19 @@ function updateTsConfig(
     const depRelativePath = relative(
       dirname(project.project.tsconfigPath || project.project.root),
       dep.dependency.root,
-    ).replace(/\\/g, '/');
+    ).replace(/\\/g, "/");
 
     // Base path mapping
-    newPaths[depId] = [join(depRelativePath, dep.entryPoint.path).replace(/\\/g, '/')];
+    newPaths[depId] = [
+      join(depRelativePath, dep.entryPoint.path).replace(/\\/g, "/"),
+    ];
 
     // Wildcard path mapping for deep imports
     // Use src/* if the entry point is in src/ directory
-    const wildcardPath = dep.entryPoint.path.startsWith('src/')
+    const wildcardPath = dep.entryPoint.path.startsWith("src/")
       ? `${depRelativePath}/src/*`
       : `${depRelativePath}/*`;
-    newPaths[`${depId}/*`] = [wildcardPath.replace(/\\/g, '/')];
+    newPaths[`${depId}/*`] = [wildcardPath.replace(/\\/g, "/")];
   }
 
   // Sort paths alphabetically, but keep base/wildcard pairs together
@@ -518,7 +556,7 @@ function updateTsConfig(
   const pathGroups: Map<string, string[]> = new Map();
 
   for (const path of Object.keys(newPaths)) {
-    const baseName = path.replace(/\/\*$/, '');
+    const baseName = path.replace(/\/\*$/, "");
     if (!pathGroups.has(baseName)) {
       pathGroups.set(baseName, []);
     }
@@ -557,7 +595,7 @@ function updateTsConfig(
     const depRelativePath = relative(
       dirname(project.project.tsconfigPath || project.project.root),
       dep.dependency.root,
-    ).replace(/\\/g, '/');
+    ).replace(/\\/g, "/");
 
     newReferences.push({ path: depRelativePath });
   }
@@ -567,6 +605,13 @@ function updateTsConfig(
 
   // Set the new paths and references
   if (!updated.compilerOptions) updated.compilerOptions = {};
+
+  // Enable composite mode if incremental compilation is enabled (defaults to true)
+  // This is required for TypeScript project references to work
+  const incrementalEnabled = config.tsconfig?.incremental !== false;
+  if (incrementalEnabled) {
+    updated.compilerOptions.composite = true;
+  }
 
   if (Object.keys(sortedPaths).length > 0) {
     updated.compilerOptions.paths = sortedPaths;
@@ -590,8 +635,9 @@ function updateTsConfig(
  */
 export async function emitChanges(
   graph: ResolvedGraph,
+  inventory: ProjectInventory,
   config: SyncConfig,
-  options: { dryRun?: boolean; verbose?: boolean } = {},
+  options: { dryRun?: boolean; verbose?: boolean; rootDir?: string } = {},
 ): Promise<EmitResult> {
   const { dryRun = false, verbose = false } = options;
 
@@ -603,55 +649,69 @@ export async function emitChanges(
     warnings: [],
   };
 
-  log.step('Analyzing changes needed...');
+  log.step("Analyzing changes needed...");
 
   for (const [projectId, project] of Object.entries(graph.projects)) {
     if (verbose) {
       log.debug(`Processing ${projectId}...`);
     }
 
-    const packageJsonPath = join(project.project.root, 'package.json');
+    const packageJsonPath = join(project.project.root, "package.json");
     const tsconfigPath = project.project.tsconfigPath;
-    const moonYmlPath = join(project.project.root, 'moon.yml');
+    const moonYmlPath = join(project.project.root, "moon.yml");
 
     // Read current files
     let currentPackageJson: PackageJson;
     try {
-      currentPackageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+      currentPackageJson = JSON.parse(await Deno.readTextFile(packageJsonPath));
     } catch (error) {
-      result.warnings.push(`Failed to read package.json for ${projectId}: ${error}`);
+      result.warnings.push(
+        `Failed to read package.json for ${projectId}: ${error}`,
+      );
       continue;
     }
 
     let currentTsconfig: TsConfig | null = null;
-    if (tsconfigPath && existsSync(tsconfigPath)) {
+    if (tsconfigPath) {
       try {
-        currentTsconfig = JSON.parse(readFileSync(tsconfigPath, 'utf-8'));
+        await Deno.stat(tsconfigPath);
+        currentTsconfig = JSON.parse(await Deno.readTextFile(tsconfigPath));
       } catch (error) {
-        result.warnings.push(`Failed to read tsconfig.json for ${projectId}: ${error}`);
+        if (!(error instanceof Deno.errors.NotFound)) {
+          result.warnings.push(
+            `Failed to read tsconfig.json for ${projectId}: ${error}`,
+          );
+        }
       }
     }
 
     // Read moon.yml if it exists (temporary - will be removed once fully transitioned to new tooling)
     let currentMoonYml: MoonYml | null = null;
-    if (existsSync(moonYmlPath)) {
-      try {
-        // Read as string first, then parse as YAML-like format
-        const moonContent = readFileSync(moonYmlPath, 'utf-8');
-        // Simple YAML parsing for our needs
-        currentMoonYml = parseMoonYml(moonContent);
-      } catch (error) {
-        result.warnings.push(`Failed to read moon.yml for ${projectId}: ${error}`);
+    try {
+      await Deno.stat(moonYmlPath);
+      // Read as string first, then parse as YAML-like format
+      const moonContent = await Deno.readTextFile(moonYmlPath);
+      // Simple YAML parsing for our needs
+      currentMoonYml = parseMoonYml(moonContent);
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) {
+        result.warnings.push(
+          `Failed to read moon.yml for ${projectId}: ${error}`,
+        );
       }
     }
 
     // Detect stale dependencies
-    const staleDeps = detectStaleDependencies(project, currentPackageJson, currentTsconfig);
+    const staleDeps = detectStaleDependencies(
+      project,
+      currentPackageJson,
+      currentTsconfig,
+    );
 
     // LOG THE ACTUAL STATE VS CURRENT STATE
     const importedDeps = Object.keys(project.dependencies).sort();
     const reportedDeps = Object.keys(currentPackageJson.dependencies || {})
-      .filter((k) => k.startsWith('@billie-coop/'))
+      .filter((k) => k.startsWith("@billie-coop/"))
       .sort();
 
     // Show the truth vs current state
@@ -660,13 +720,21 @@ export async function emitChanges(
 
     if (toAdd.length > 0 || toRemove.length > 0) {
       log.info(`\n📦 ${projectId}:`);
-      log.info(`  IMPORTED (truth): ${importedDeps.length > 0 ? importedDeps.join(', ') : 'NONE'}`);
       log.info(
-        `  REPORTED (current): ${reportedDeps.length > 0 ? reportedDeps.join(', ') : 'NONE'}`,
+        `  IMPORTED (truth): ${
+          importedDeps.length > 0 ? importedDeps.join(", ") : "NONE"
+        }`,
+      );
+      log.info(
+        `  REPORTED (current): ${
+          reportedDeps.length > 0 ? reportedDeps.join(", ") : "NONE"
+        }`,
       );
 
-      if (toAdd.length > 0) log.info(`  ➕ TO ADD: ${toAdd.join(', ')}`);
-      if (toRemove.length > 0) log.info(`  ➖ TO REMOVE: ${toRemove.join(', ')}`);
+      if (toAdd.length > 0) log.info(`  ➕ TO ADD: ${toAdd.join(", ")}`);
+      if (toRemove.length > 0) {
+        log.info(`  ➖ TO REMOVE: ${toRemove.join(", ")}`);
+      }
     }
 
     // Track stale dependencies
@@ -679,26 +747,37 @@ export async function emitChanges(
 
       if (verbose) {
         if (staleDeps.packageJsonDeps.length > 0) {
-          log.debug(`  Stale package.json deps: ${staleDeps.packageJsonDeps.join(', ')}`);
+          log.debug(
+            `  Stale package.json deps: ${
+              staleDeps.packageJsonDeps.join(", ")
+            }`,
+          );
         }
         if (staleDeps.tsconfigPaths.length > 0) {
-          log.debug(`  Stale tsconfig paths: ${staleDeps.tsconfigPaths.join(', ')}`);
+          log.debug(
+            `  Stale tsconfig paths: ${staleDeps.tsconfigPaths.join(", ")}`,
+          );
         }
       }
     }
 
     // Update package.json
-    const { updated: updatedPackageJson, changed: packageJsonChanged } = updatePackageJson(
-      project,
-      currentPackageJson,
-      config,
-    );
+    const { updated: updatedPackageJson, changed: packageJsonChanged } =
+      updatePackageJson(
+        project,
+        currentPackageJson,
+        config,
+      );
 
     // Update tsconfig.json
-    const tsconfigResult = currentTsconfig ? updateTsConfig(project, currentTsconfig) : null;
+    const tsconfigResult = currentTsconfig
+      ? updateTsConfig(project, currentTsconfig, config)
+      : null;
 
     // Update moon.yml (temporary - will be removed once fully transitioned to new tooling)
-    const moonYmlResult = currentMoonYml ? updateMoonYml(project, currentMoonYml, config) : null;
+    const moonYmlResult = currentMoonYml
+      ? updateMoonYml(project, currentMoonYml, config)
+      : null;
 
     // Track changes
     let projectModified = false;
@@ -719,7 +798,7 @@ export async function emitChanges(
           );
         }
       } else {
-        writeFileSync(packageJsonPath, `${updatedContent}\n`);
+        await Deno.writeTextFile(packageJsonPath, `${updatedContent}\n`);
       }
 
       result.filesModified++;
@@ -739,10 +818,14 @@ export async function emitChanges(
 
       if (dryRun) {
         if (result.diffs) {
-          result.diffs[tsconfigPath] = createDiff(originalContent, updatedContent, tsconfigPath);
+          result.diffs[tsconfigPath] = createDiff(
+            originalContent,
+            updatedContent,
+            tsconfigPath,
+          );
         }
       } else {
-        writeFileSync(tsconfigPath, `${updatedContent}\n`);
+        await Deno.writeTextFile(tsconfigPath, `${updatedContent}\n`);
       }
 
       result.filesModified++;
@@ -763,10 +846,14 @@ export async function emitChanges(
 
       if (dryRun) {
         if (result.diffs) {
-          result.diffs[moonYmlPath] = createDiff(originalContent, updatedContent, moonYmlPath);
+          result.diffs[moonYmlPath] = createDiff(
+            originalContent,
+            updatedContent,
+            moonYmlPath,
+          );
         }
       } else {
-        writeFileSync(moonYmlPath, updatedContent);
+        await Deno.writeTextFile(moonYmlPath, updatedContent);
       }
 
       result.filesModified++;
@@ -782,6 +869,26 @@ export async function emitChanges(
     }
   }
 
+  // Update root tsconfig for incremental compilation
+  // This needs to be done after all project tsconfigs are updated
+  const rootDir = options.rootDir || Deno.cwd();
+  const rootTsconfigResult = await updateRootTsConfig(
+    rootDir,
+    inventory,
+    config,
+    {
+      dryRun,
+      verbose,
+    },
+  );
+
+  if (rootTsconfigResult.updated) {
+    result.filesModified++;
+    if (rootTsconfigResult.diff && result.diffs) {
+      result.diffs[join(rootDir, "tsconfig.json")] = rootTsconfigResult.diff;
+    }
+  }
+
   // Report summary
   if (Object.keys(result.staleDependencies).length > 0) {
     const totalStale = Object.values(result.staleDependencies).reduce(
@@ -794,13 +901,17 @@ export async function emitChanges(
     );
 
     log.warn(
-      `Found ${totalStale} stale dependencies across ${Object.keys(result.staleDependencies).length} projects`,
+      `Found ${totalStale} stale dependencies across ${
+        Object.keys(result.staleDependencies).length
+      } projects`,
     );
 
     if (verbose) {
-      for (const [projectId, stale] of Object.entries(result.staleDependencies)) {
+      for (
+        const [projectId, stale] of Object.entries(result.staleDependencies)
+      ) {
         if (stale?.packageJsonDeps?.length > 0) {
-          log.debug(`  ${projectId}: ${stale.packageJsonDeps.join(', ')}`);
+          log.debug(`  ${projectId}: ${stale.packageJsonDeps.join(", ")}`);
         }
       }
     }
@@ -811,12 +922,12 @@ export async function emitChanges(
       `Will modify ${result.filesModified} files across ${result.projectsUpdated.length} projects`,
     );
   } else {
-    log.success('All dependencies are already in sync!');
+    log.success("All dependencies are already in sync!");
   }
 
   // Show summary in dry-run mode
   if (dryRun && result.projectsUpdated.length > 0) {
-    log.section('Proposed Changes Summary');
+    log.section("Proposed Changes Summary");
 
     // Group projects by change type
     const projectsWithStale = Object.keys(result.staleDependencies);
@@ -825,7 +936,9 @@ export async function emitChanges(
     );
 
     if (projectsWithStale.length > 0) {
-      log.warn(`\n📦 Projects with stale dependencies to remove (${projectsWithStale.length}):`);
+      log.warn(
+        `\n📦 Projects with stale dependencies to remove (${projectsWithStale.length}):`,
+      );
 
       for (const projectId of projectsWithStale.slice(0, verbose ? 100 : 5)) {
         const stale = result.staleDependencies[projectId];
@@ -834,45 +947,59 @@ export async function emitChanges(
         log.info(`\n  ${projectId}:`);
 
         if (stale && stale.packageJsonDeps.length > 0) {
-          log.info(`    ❌ Remove: ${stale.packageJsonDeps.join(', ')}`);
+          log.info(`    ❌ Remove: ${stale.packageJsonDeps.join(", ")}`);
         }
 
         if (project) {
           const deps = Object.keys(project.dependencies);
           if (deps.length > 0) {
             log.info(
-              `    ✅ Keep/Add: ${deps.slice(0, 10).join(', ')}${deps.length > 10 ? ` + ${deps.length - 10} more` : ''}`,
+              `    ✅ Keep/Add: ${deps.slice(0, 10).join(", ")}${
+                deps.length > 10 ? ` + ${deps.length - 10} more` : ""
+              }`,
             );
           }
         }
       }
 
       if (projectsWithStale.length > 5 && !verbose) {
-        log.info(`\n  ... and ${projectsWithStale.length - 5} more projects with stale deps`);
+        log.info(
+          `\n  ... and ${
+            projectsWithStale.length - 5
+          } more projects with stale deps`,
+        );
       }
     }
 
     if (projectsWithAdditions.length > 0) {
-      log.info(`\n📦 Projects getting dependency updates (${projectsWithAdditions.length}):`);
+      log.info(
+        `\n📦 Projects getting dependency updates (${projectsWithAdditions.length}):`,
+      );
 
-      for (const projectId of projectsWithAdditions.slice(0, verbose ? 100 : 5)) {
+      for (
+        const projectId of projectsWithAdditions.slice(0, verbose ? 100 : 5)
+      ) {
         const project = graph.projects[projectId];
         if (project) {
           const deps = Object.keys(project.dependencies);
           log.info(`\n  ${projectId}:`);
           log.info(
-            `    ➕ Dependencies: ${deps.slice(0, 8).join(', ')}${deps.length > 8 ? ` + ${deps.length - 8} more` : ''}`,
+            `    ➕ Dependencies: ${deps.slice(0, 8).join(", ")}${
+              deps.length > 8 ? ` + ${deps.length - 8} more` : ""
+            }`,
           );
         }
       }
 
       if (projectsWithAdditions.length > 5 && !verbose) {
-        log.info(`\n  ... and ${projectsWithAdditions.length - 5} more projects`);
+        log.info(
+          `\n  ... and ${projectsWithAdditions.length - 5} more projects`,
+        );
       }
     }
 
     // Show aggregated statistics
-    log.section('Change Statistics');
+    log.section("Change Statistics");
 
     const totalDepsToAdd = Object.values(graph.projects).reduce(
       (sum, p) => sum + Object.keys(p.dependencies).length,
@@ -889,7 +1016,9 @@ export async function emitChanges(
     log.info(`   • Stale dependencies to remove: ${totalStaleToRemove}`);
     log.info(`   • Files to update: ${result.filesModified}`);
     log.info(
-      `   • Projects affected: ${result.projectsUpdated.length} / ${Object.keys(graph.projects).length}`,
+      `   • Projects affected: ${result.projectsUpdated.length} / ${
+        Object.keys(graph.projects).length
+      }`,
     );
 
     // Show most common dependencies being added

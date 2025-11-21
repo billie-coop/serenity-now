@@ -1,8 +1,12 @@
-// Phase 1: Workspace discovery
+// Workspace discovery for the sync-deps tool
+// Phase 1: Discovers all projects in the monorepo
+// Deno version using built-in APIs
 
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import type { RepoManager } from '../core/manager';
+import { join, relative } from "@std/path";
+import { expandGlob } from "@std/fs";
+import { exists } from "@std/fs/exists";
+import { log } from "../utils/logging.ts";
+import { tryReadJson } from "../utils/files.ts";
 import type {
   PackageJson,
   ProjectInfo,
@@ -10,252 +14,279 @@ import type {
   SyncConfig,
   WorkspaceSubType,
   WorkspaceTypeConfig,
-} from '../core/types';
-import { fileExists, getRelativePath, readPackageJson } from '../utils/files';
+} from "../core/types.ts";
 
-export async function discoverWorkspaceProjects(
-  manager: RepoManager,
-  config: SyncConfig,
-): Promise<ProjectInventory> {
-  const logger = manager.getLogger();
-  const inventory: ProjectInventory = {
-    projects: {},
-    warnings: [],
-    workspaceConfigs: config.workspaceTypes || {},
-  };
+/**
+ * Discovers workspace patterns from package.json workspaces field
+ */
+async function discoverWorkspacePatterns(rootDir: string): Promise<string[]> {
+  const packageJsonPath = join(rootDir, "package.json");
+  const rootPackageJson = await tryReadJson<PackageJson>(packageJsonPath, {});
 
-  // Read root package.json
-  const rootPackageJson = await readPackageJson(manager.root);
-  if (!rootPackageJson) {
-    throw new Error('No package.json found in root directory');
+  // Get workspace patterns from package.json
+  const workspaceField = rootPackageJson.workspaces;
+  if (!workspaceField) {
+    return [];
   }
 
-  // Get workspace patterns
-  const workspacePatterns = getWorkspacePatterns(rootPackageJson);
-  if (workspacePatterns.length === 0) {
-    logger.warn('No workspace patterns found in root package.json');
-    return inventory;
-  }
+  // Handle both array and object formats
+  const patterns = Array.isArray(workspaceField)
+    ? workspaceField
+    : workspaceField.packages || [];
 
-  logger.step(`Scanning workspace patterns: ${workspacePatterns.join(', ')}`);
+  // Filter out negative patterns
+  return patterns.filter((p) => !p.startsWith("!"));
+}
 
-  // Find all package.json files matching workspace patterns
-  const packageJsonPaths = await findWorkspacePackages(manager.root, workspacePatterns);
+/**
+ * Find all projects matching workspace patterns
+ */
+async function findProjects(
+  rootDir: string,
+  patterns: string[],
+  verbose: boolean,
+): Promise<Map<string, string>> {
+  const projects = new Map<string, string>();
 
-  logger.debug(`Found ${packageJsonPaths.length} potential projects`);
+  for (const pattern of patterns) {
+    const searchPattern = pattern.endsWith("/*") ? pattern : `${pattern}/*`;
+    const globPattern = join(rootDir, searchPattern, "package.json");
 
-  // Process each project
-  for (const pkgPath of packageJsonPaths) {
-    const projectRoot = path.dirname(pkgPath);
-    const relativeRoot = getRelativePath(manager.root, projectRoot);
-
-    const packageJson = await readPackageJson(projectRoot);
-    if (!packageJson || !packageJson.name) {
-      logger.warn(`Skipping ${relativeRoot} - no name in package.json`);
-      continue;
+    if (verbose) {
+      log.debug(`  Searching: ${searchPattern}`);
     }
 
-    // Check for tsconfig.json
-    const tsconfigPath = path.join(projectRoot, 'tsconfig.json');
-    const hasTsconfig = await fileExists(tsconfigPath);
+    for await (const entry of expandGlob(globPattern, { root: rootDir })) {
+      if (entry.isFile && entry.name === "package.json") {
+        const projectDir = entry.path.replace(/\/package\.json$/, "");
+        const projectPath = relative(rootDir, projectDir);
 
-    // Determine workspace type and config
-    const { workspaceType, workspaceSubType, workspaceConfig } = determineWorkspaceType(
-      relativeRoot,
-      packageJson,
-      inventory.workspaceConfigs,
+        if (projectPath && !projectPath.startsWith("..")) {
+          const packageJson = await tryReadJson<PackageJson>(entry.path, {});
+          if (packageJson.name) {
+            projects.set(packageJson.name, projectDir);
+            if (verbose) {
+              log.debug(`    Found: ${packageJson.name} at ${projectPath}`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return projects;
+}
+
+/**
+ * Determines workspace type configuration for a project
+ */
+function determineWorkspaceType(
+  relativeRoot: string,
+  config: SyncConfig,
+): {
+  workspaceType: "app" | "shared-package" | "unknown";
+  workspaceSubType: WorkspaceSubType;
+  workspaceConfig?: WorkspaceTypeConfig;
+} {
+  // Check configured patterns
+  if (config.workspaceTypes) {
+    for (const [pattern, typeConfig] of Object.entries(config.workspaceTypes)) {
+      const regex = new RegExp(
+        `^${pattern.replace(/\*/g, "[^/]+")}$`,
+      );
+      if (regex.test(relativeRoot)) {
+        const subType = typeConfig.subType ||
+          inferWorkspaceSubType(relativeRoot);
+        return {
+          workspaceType: typeConfig.type,
+          workspaceSubType: subType,
+          workspaceConfig: typeConfig,
+        };
+      }
+    }
+  }
+
+  // Fallback to guessing based on common patterns
+  const workspaceType = relativeRoot.startsWith("apps/") ||
+      relativeRoot.startsWith("websites/") ||
+      relativeRoot === "app"
+    ? "app"
+    : relativeRoot.startsWith("packages/") || relativeRoot === "packages"
+    ? "shared-package"
+    : "unknown";
+
+  return {
+    workspaceType,
+    workspaceSubType: inferWorkspaceSubType(relativeRoot),
+  };
+}
+
+/**
+ * Infers workspace sub-type from the project path
+ */
+function inferWorkspaceSubType(relativeRoot: string): WorkspaceSubType {
+  const parts = relativeRoot.toLowerCase();
+
+  if (
+    parts.includes("mobile") || parts.includes("ios") ||
+    parts.includes("android")
+  ) {
+    return "mobile";
+  }
+  if (parts.includes("db") || parts.includes("database")) {
+    return "db";
+  }
+  if (parts.includes("marketing")) {
+    return "marketing";
+  }
+  if (parts.includes("plugin")) {
+    return "plugin";
+  }
+  if (parts.includes("ui") || parts.includes("component")) {
+    return "ui";
+  }
+  if (parts.includes("website") || parts.includes("site")) {
+    return "website";
+  }
+  if (
+    parts.includes("lib") || parts.includes("util") || parts.includes("helper")
+  ) {
+    return "library";
+  }
+
+  return "unknown";
+}
+
+/**
+ * Validates package name against workspace configuration
+ */
+function validatePackageName(
+  name: string,
+  relativeRoot: string,
+  workspaceConfig?: WorkspaceTypeConfig,
+): string[] {
+  const warnings: string[] = [];
+
+  if (!workspaceConfig?.enforceNamePrefix) {
+    return warnings;
+  }
+
+  const prefix = workspaceConfig.enforceNamePrefix;
+  if (!name.startsWith(prefix)) {
+    warnings.push(
+      `Package ${name} at ${relativeRoot} should start with "${prefix}" based on workspace configuration`,
     );
+  }
 
-    // Create ProjectInfo
-    const projectInfo: ProjectInfo = {
-      id: packageJson.name,
+  return warnings;
+}
+
+// Define minimal interface to avoid circular import
+interface ManagerLike {
+  root: string;
+  isVerbose(): boolean;
+}
+
+/**
+ * Discovers all projects in the workspace
+ */
+export async function discoverWorkspace(
+  manager: ManagerLike,
+  config: SyncConfig,
+): Promise<ProjectInventory> {
+  const rootDir = manager.root;
+  const verbose = manager.isVerbose();
+
+  log.step("Discovering workspace projects...");
+
+  // Check if we're in a monorepo
+  const rootPackageJsonPath = join(rootDir, "package.json");
+  if (!await exists(rootPackageJsonPath, { isFile: true })) {
+    throw new Error("No package.json found in root directory");
+  }
+
+  // Discover workspace patterns
+  const patterns = await discoverWorkspacePatterns(rootDir);
+  if (patterns.length === 0) {
+    log.warn("No workspace configuration found in package.json");
+    return { projects: {}, warnings: [], workspaceConfigs: {} };
+  }
+
+  if (verbose) {
+    log.debug(`Workspace patterns: ${patterns.join(", ")}`);
+  }
+
+  // Find all projects
+  const projectPaths = await findProjects(rootDir, patterns, verbose);
+
+  // Build project inventory
+  const projects: Record<string, ProjectInfo> = {};
+  const warnings: string[] = [];
+  const workspaceConfigs: Record<string, WorkspaceTypeConfig> = {};
+
+  for (const [packageName, projectRoot] of projectPaths.entries()) {
+    const relativeRoot = relative(rootDir, projectRoot);
+    const packageJsonPath = join(projectRoot, "package.json");
+
+    const packageJson = await tryReadJson<PackageJson>(packageJsonPath, {});
+
+    // Find tsconfig.json
+    let tsconfigPath: string | undefined;
+    const tsconfigCandidates = [
+      join(projectRoot, "tsconfig.json"),
+      join(projectRoot, "tsconfig.build.json"),
+    ];
+
+    for (const candidate of tsconfigCandidates) {
+      if (await exists(candidate, { isFile: true })) {
+        tsconfigPath = candidate;
+        break;
+      }
+    }
+
+    // Determine workspace type
+    const { workspaceType, workspaceSubType, workspaceConfig } =
+      determineWorkspaceType(
+        relativeRoot,
+        config,
+      );
+
+    // Track workspace configs for reference
+    if (workspaceConfig) {
+      workspaceConfigs[relativeRoot] = workspaceConfig;
+    }
+
+    // Validate package name
+    const nameWarnings = validatePackageName(
+      packageName,
+      relativeRoot,
+      workspaceConfig,
+    );
+    warnings.push(...nameWarnings);
+
+    projects[packageName] = {
+      id: packageName,
       root: projectRoot,
       relativeRoot,
       packageJson,
-      tsconfigPath: hasTsconfig ? tsconfigPath : undefined,
+      tsconfigPath,
       workspaceType,
       workspaceSubType,
       workspaceConfig,
       isPrivate: packageJson.private ?? false,
     };
-
-    // Validate name prefix based on workspace-specific config
-    if (workspaceConfig?.enforceNamePrefix) {
-      if (
-        typeof workspaceConfig.enforceNamePrefix === 'string' &&
-        !projectInfo.id.startsWith(workspaceConfig.enforceNamePrefix)
-      ) {
-        inventory.warnings.push(
-          `Project ${projectInfo.id} doesn't match required prefix ${workspaceConfig.enforceNamePrefix} for ${workspaceType} workspace`,
-        );
-      }
-    }
-
-    // Skip ignored projects
-    if (config.ignoreProjects?.includes(projectInfo.id)) {
-      logger.debug(`Skipping ignored project: ${projectInfo.id}`);
-      continue;
-    }
-
-    inventory.projects[projectInfo.id] = projectInfo;
-    logger.debug(
-      `Discovered project: ${projectInfo.id} (${projectInfo.workspaceType}/${projectInfo.workspaceSubType})`,
-    );
   }
 
-  logger.step(`Found ${Object.keys(inventory.projects).length} projects`);
+  log.success(`Found ${Object.keys(projects).length} workspace projects`);
 
-  return inventory;
-}
-
-function getWorkspacePatterns(packageJson: PackageJson): string[] {
-  const patterns: string[] = [];
-
-  if (packageJson.workspaces) {
-    if (Array.isArray(packageJson.workspaces)) {
-      patterns.push(...packageJson.workspaces);
-    } else if (packageJson.workspaces.packages) {
-      patterns.push(...packageJson.workspaces.packages);
-    }
-  }
-
-  return patterns;
-}
-
-async function findWorkspacePackages(rootDir: string, patterns: string[]): Promise<string[]> {
-  const packageJsonPaths: string[] = [];
-
-  for (const pattern of patterns) {
-    // Simple pattern handling for common workspace patterns
-    const searchPath = path.join(rootDir, pattern);
-
-    if (pattern.includes('*')) {
-      // Handle patterns like "apps/*" or "packages/*"
-      const baseDir = pattern.replace(/\/?\*$/, '');
-      const dirPath = path.join(rootDir, baseDir);
-
-      try {
-        const entries = await fs.readdir(dirPath, { withFileTypes: true });
-
-        for (const entry of entries) {
-          if (entry.isDirectory() && entry.name !== 'node_modules') {
-            const pkgJsonPath = path.join(dirPath, entry.name, 'package.json');
-            if (await fileExists(pkgJsonPath)) {
-              packageJsonPaths.push(pkgJsonPath);
-            }
-          }
-        }
-      } catch (_err) {
-        // Directory doesn't exist, skip
-      }
-    } else {
-      // Direct path to a package
-      const pkgJsonPath = path.join(searchPath, 'package.json');
-      if (await fileExists(pkgJsonPath)) {
-        packageJsonPaths.push(pkgJsonPath);
+  if (warnings.length > 0) {
+    log.warn(`${warnings.length} warnings during workspace discovery`);
+    if (verbose) {
+      for (const w of warnings) {
+        log.debug(`  ${w}`);
       }
     }
   }
 
-  return packageJsonPaths;
-}
-
-function determineWorkspaceType(
-  relativeRoot: string,
-  packageJson: PackageJson,
-  workspaceConfigs: Record<string, WorkspaceTypeConfig>,
-): {
-  workspaceType: 'app' | 'shared-package' | 'unknown';
-  workspaceSubType: WorkspaceSubType;
-  workspaceConfig?: WorkspaceTypeConfig;
-} {
-  // Sort patterns by specificity (most specific first)
-  // More specific = longer pattern, or pattern with suffix after wildcard
-  const sortedPatterns = Object.entries(workspaceConfigs).sort(([patternA], [patternB]) => {
-    // Count non-wildcard characters (more specific patterns have more)
-    const specificityA = patternA.replace(/\*/g, '').length;
-    const specificityB = patternB.replace(/\*/g, '').length;
-
-    // Sort by specificity descending (more specific first)
-    if (specificityA !== specificityB) {
-      return specificityB - specificityA;
-    }
-
-    // If same specificity, prefer longer patterns
-    return patternB.length - patternA.length;
-  });
-
-  // Check each workspace pattern to find a match (most specific first)
-  for (const [pattern, config] of sortedPatterns) {
-    if (matchesPattern(relativeRoot, pattern)) {
-      return {
-        workspaceType: config.type,
-        workspaceSubType: config.subType || 'unknown',
-        workspaceConfig: config,
-      };
-    }
-  }
-
-  // Fallback to heuristics if no pattern matches
-  if (relativeRoot.startsWith('apps/') || relativeRoot.startsWith('websites/')) {
-    return {
-      workspaceType: 'app',
-      workspaceSubType: 'other',
-      workspaceConfig: undefined,
-    };
-  }
-
-  if (relativeRoot.startsWith('packages/')) {
-    return {
-      workspaceType: 'shared-package',
-      workspaceSubType: 'library',
-      workspaceConfig: undefined,
-    };
-  }
-
-  // Check by package.json hints
-  if (packageJson.main || packageJson.module || packageJson.types || packageJson.exports) {
-    return {
-      workspaceType: 'shared-package',
-      workspaceSubType: 'library',
-      workspaceConfig: undefined,
-    };
-  }
-
-  return {
-    workspaceType: 'unknown',
-    workspaceSubType: 'unknown',
-    workspaceConfig: undefined,
-  };
-}
-
-function matchesPattern(path: string, pattern: string): boolean {
-  // Exact match
-  if (path === pattern) return true;
-
-  // Handle patterns with wildcards (e.g., "apps/*", "apps/*-mobile")
-  if (pattern.includes('*')) {
-    // Convert glob pattern to regex
-    // * matches one or more characters (non-greedy, non-slash for path segments)
-    const regexPattern = pattern
-      .split('/')
-      .map((segment) => {
-        if (segment === '*') {
-          // Segment is just *, match any directory name
-          return '[^/]+';
-        }
-        if (segment.includes('*')) {
-          // Segment has * in it (like "*-mobile"), match with wildcard
-          return segment.replace(/\*/g, '[^/]+');
-        }
-        // Literal segment
-        return segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape regex chars
-      })
-      .join('/');
-
-    const regex = new RegExp(`^${regexPattern}$`);
-    return regex.test(path);
-  }
-
-  return false;
+  return { projects, warnings, workspaceConfigs };
 }
