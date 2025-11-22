@@ -28,6 +28,7 @@ export interface TempRepoOptions {
   missingTsconfig?: boolean;
   defaultDependencies?: string[];
   skipConfig?: boolean;
+  enforcePrefix?: string;
 }
 
 export async function createTempRepo(
@@ -44,19 +45,19 @@ export async function createTempRepo(
   });
 
   if (!options.skipConfig) {
+    const config = {
+      workspaceTypes: {
+        "apps/*": {
+          type: "app",
+          enforceNamePrefix: options.enforcePrefix,
+        },
+        "packages/*": { type: "shared-package" },
+      },
+      defaultDependencies: options.defaultDependencies,
+    };
     await writeTextFile(
       join(root, "serenity-now.config.jsonc"),
-      JSON.stringify(
-        {
-          workspaceTypes: {
-            "apps/*": { type: "app", subType: "website" },
-            "packages/*": { type: "shared-package" },
-          },
-          defaultDependencies: options.defaultDependencies,
-        },
-        null,
-        2,
-      ),
+      JSON.stringify(config, null, 2),
     );
   }
 
@@ -64,7 +65,7 @@ export async function createTempRepo(
   const appPackage = join(appDir, "package.json");
   const appTsconfig = join(appDir, "tsconfig.json");
   await writeJsonFile(appPackage, {
-    name: "@repo/app-web",
+    name: options.enforcePrefix ? "app-web" : "@repo/app-web",
     version: "0.0.0",
     dependencies: includeStale
       ? {

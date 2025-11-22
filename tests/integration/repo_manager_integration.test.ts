@@ -240,3 +240,26 @@ Deno.test("Workspace discovery warns when tsconfig is missing", async () => {
     await repo.teardown();
   }
 });
+
+Deno.test("Workspace discovery warns when package name violates prefix", async () => {
+  const repo = await createTempRepo({
+    includeStale: false,
+    enforcePrefix: "@repo/",
+  });
+  try {
+    const deps = createDefaultDeps({ verbose: false });
+    const manager = new RepoManager(
+      { rootDir: repo.root, dryRun: true, verbose: false },
+      deps,
+    );
+
+    await manager.loadConfig();
+    const inventory = await manager.discoverWorkspace();
+    assert(
+      inventory.warnings.some((w) => w.includes("should start with")),
+      "Expected enforce prefix warning",
+    );
+  } finally {
+    await repo.teardown();
+  }
+});

@@ -149,3 +149,57 @@ Deno.test("config loader validates workspace type entries", async () => {
     "workspaceTypes",
   );
 });
+
+Deno.test("config loader parses all optional fields", async () => {
+  const fs = new InMemoryFileSystem({
+    "/repo/serenity-now.config.jsonc": `{
+      "workspaceTypes": {
+        "apps/*": { "type": "app" }
+      },
+      "excludePatterns": ["**/*.spec.ts", "**/*.test.ts"],
+      "universalUtilities": ["@repo/shared", "@repo/common"],
+      "enforceNamePrefix": "@repo/",
+      "ignoreProjects": ["docs"],
+      "ignoreImports": ["node:*"],
+      "tsconfig": {
+        "preserveOutDir": true,
+        "typeOnlyInDevDependencies": false,
+        "incremental": true
+      }
+    }`,
+  });
+  const logger = createTestLogger();
+  const loader = createConfigLoader();
+
+  const config = await loader.load({ rootDir: "/repo" }, logger, fs);
+
+  assertEquals(config.excludePatterns, ["**/*.spec.ts", "**/*.test.ts"]);
+  assertEquals(config.universalUtilities, ["@repo/shared", "@repo/common"]);
+  assertEquals(config.enforceNamePrefix, "@repo/");
+  assertEquals(config.ignoreProjects, ["docs"]);
+  assertEquals(config.ignoreImports, ["node:*"]);
+  assertEquals(config.tsconfig?.preserveOutDir, true);
+  assertEquals(config.tsconfig?.typeOnlyInDevDependencies, false);
+  assertEquals(config.tsconfig?.incremental, true);
+});
+
+Deno.test("config loader parses minimal optional fields", async () => {
+  const fs = new InMemoryFileSystem({
+    "/repo/serenity-now.config.jsonc": `{
+      "workspaceTypes": {
+        "apps/*": { "type": "app" }
+      },
+      "excludePatterns": ["**/*.spec.ts"],
+      "universalUtilities": ["@repo/shared"],
+      "enforceNamePrefix": "@repo/"
+    }`,
+  });
+  const logger = createTestLogger();
+  const loader = createConfigLoader();
+
+  const config = await loader.load({ rootDir: "/repo" }, logger, fs);
+
+  assertEquals(config.excludePatterns, ["**/*.spec.ts"]);
+  assertEquals(config.universalUtilities, ["@repo/shared"]);
+  assertEquals(config.enforceNamePrefix, "@repo/");
+});
