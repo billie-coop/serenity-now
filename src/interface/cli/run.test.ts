@@ -81,6 +81,7 @@ function createFakeDeps(
   const graph: ResolvedGraph = overrides.graph ?? {
     projects: {},
     cycles: [],
+    diamonds: [],
     warnings: ["graph warning"],
   };
   const emit: EmitResult = overrides.emit ?? {

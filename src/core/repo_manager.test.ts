@@ -105,7 +105,12 @@ function makeTestDeps(log: string[]): RepoManagerDeps {
     graphResolver: {
       resolve: (): Promise<ResolvedGraph> => {
         log.push("graph-resolve");
-        return Promise.resolve({ projects: {}, cycles: [], warnings: [] });
+        return Promise.resolve({
+          projects: {},
+          cycles: [],
+          diamonds: [],
+          warnings: [],
+        });
       },
     },
     changeEmitter: {

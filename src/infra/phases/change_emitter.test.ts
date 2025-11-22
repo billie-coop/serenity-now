@@ -110,6 +110,7 @@ function createGraph(): ResolvedGraph {
       "@repo/lib": projectLib,
     },
     cycles: [],
+    diamonds: [],
     warnings: [],
   };
 }

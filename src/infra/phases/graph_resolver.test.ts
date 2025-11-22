@@ -1,5 +1,5 @@
 import { createGraphResolver } from "./graph_resolver.ts";
-import type { LoggerPort } from "../../core/ports.ts";
+import type { FileSystemPort, LoggerPort } from "../../core/ports.ts";
 import type {
   ProjectInventory,
   ProjectUsage,
@@ -28,6 +28,16 @@ function createLogger(): LoggerPort {
     warn: () => {},
     error: () => {},
     debug: () => {},
+  };
+}
+
+function createMockFs(): FileSystemPort {
+  return {
+    fileExists: () => Promise.resolve(true),
+    readJson: <T>() => Promise.resolve({} as T),
+    writeJson: () => Promise.resolve(),
+    readText: () => Promise.resolve(""),
+    writeText: () => Promise.resolve(),
   };
 }
 
@@ -84,6 +94,7 @@ Deno.test("graph resolver links dependencies between projects", async () => {
     baseConfig,
     baseOptions,
     createLogger(),
+    createMockFs(),
   );
 
   const appNode = graph.projects["app"];
@@ -111,6 +122,7 @@ Deno.test("graph resolver warns about missing dependencies", async () => {
     baseConfig,
     baseOptions,
     createLogger(),
+    createMockFs(),
   );
   assert(
     graph.warnings.some((w) => w.includes("missing")),
@@ -166,6 +178,7 @@ Deno.test("graph resolver detects cycles", async () => {
     baseConfig,
     baseOptions,
     createLogger(),
+    createMockFs(),
   );
 
   assert(graph.cycles.length > 0, "Expected cycle to be detected");

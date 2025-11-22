@@ -1,5 +1,6 @@
 import { relative } from "@std/path";
 import { walk } from "@std/fs/walk";
+import { globToRegExp } from "@std/path/glob-to-regexp";
 import type {
   FileSystemPort,
   ImportScannerPort,
@@ -28,6 +29,22 @@ const DEFAULT_EXTENSIONS = [
   ".cts",
   ".js",
   ".jsx",
+];
+
+const DEFAULT_EXCLUDE_PATTERNS = [
+  "**/node_modules/**",
+  "**/dist/**",
+  "**/.turbo/**",
+  "**/.moon/**",
+  "**/build/**",
+  "**/out/**",
+  "**/coverage/**",
+  "**/.next/**",
+  "**/__tests__/**",
+  "**/*.test.ts",
+  "**/*.test.tsx",
+  "**/*.spec.ts",
+  "**/*.spec.tsx",
 ];
 
 function createDefaultWalker(): FileWalker {
@@ -93,9 +110,34 @@ function shouldProcessFile(path: string): boolean {
   return DEFAULT_EXTENSIONS.some((ext) => path.endsWith(ext));
 }
 
+function matchesPattern(value: string, pattern: string): boolean {
+  if (pattern.includes("*")) {
+    const regex = new RegExp(`^${pattern.replace(/\*/g, ".*")}$`);
+    return regex.test(value);
+  }
+  return value === pattern || value.startsWith(`${pattern}/`);
+}
+
+function shouldExcludeFile(relativePath: string, config: SyncConfig): boolean {
+  // Normalize path separators to forward slashes for consistent matching across platforms
+  const normalizedPath = relativePath.replace(/\\/g, "/");
+
+  const excludePatterns = [
+    ...DEFAULT_EXCLUDE_PATTERNS,
+    ...(config.excludePatterns ?? []),
+  ];
+
+  return excludePatterns.some((pattern) => {
+    // Use Deno's standard library for proper glob-to-regex conversion
+    // This correctly handles directory boundaries and doesn't match substrings
+    const regex = globToRegExp(pattern, { extended: true, globstar: true });
+    return regex.test(normalizedPath);
+  });
+}
+
 function shouldIgnore(specifier: string, config: SyncConfig): boolean {
   return Boolean(
-    config.ignoreImports?.some((pattern) => pattern === specifier),
+    config.ignoreImports?.some((pattern) => matchesPattern(specifier, pattern)),
   );
 }
 
@@ -154,11 +196,12 @@ async function scanProjectFiles(
   for await (const entry of walker(projectRoot)) {
     if (!entry.isFile) continue;
     if (!shouldProcessFile(entry.path)) continue;
-    if (entry.path.includes("node_modules")) continue;
+
+    const relativeFile = relative(projectRoot, entry.path);
+    if (shouldExcludeFile(relativeFile, config)) continue;
 
     try {
       const content = await readFile(entry.path, fs);
-      const relativeFile = relative(projectRoot, entry.path);
       const specifiers = parseSpecifiers(content);
       for (const { specifier, isTypeOnly } of specifiers) {
         if (!isExternal(specifier) || shouldIgnore(specifier, config)) {

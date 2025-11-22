@@ -12,6 +12,7 @@ export interface RepoManagerOptions {
   dryRun?: boolean;
   verbose?: boolean;
   failOnStale?: boolean;
+  force?: boolean;
 }
 
 export type WorkspaceSubType =
@@ -101,9 +102,21 @@ export interface Cycle {
   projects: ProjectInfo[];
 }
 
+export interface DiamondPattern {
+  projectId: string;
+  directDependency: string;
+  transitiveThrough: string[];
+  pattern:
+    | "universal-utility"
+    | "incomplete-abstraction"
+    | "potential-layering-violation";
+  suggestion: string;
+}
+
 export interface ResolvedGraph {
   projects: Record<string, ResolvedProject>;
   cycles: Cycle[];
+  diamonds: DiamondPattern[];
   warnings: string[];
 }
 

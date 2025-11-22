@@ -58,6 +58,7 @@ export interface GraphResolverPort {
     config: SyncConfig,
     options: RepoManagerOptions,
     logger: LoggerPort,
+    fs: FileSystemPort,
   ): Promise<ResolvedGraph>;
 }
 

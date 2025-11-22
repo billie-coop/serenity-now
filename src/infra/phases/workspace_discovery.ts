@@ -154,6 +154,12 @@ export function createWorkspaceDiscovery(
             continue;
           }
 
+          // Skip if project should be ignored
+          if (config.ignoreProjects?.includes(packageName)) {
+            logger.debug(`Skipping ignored project: ${packageName}`);
+            continue;
+          }
+
           const tsconfigPath = join(projectRoot, "tsconfig.json");
           const hasTsconfig = await fs.fileExists(tsconfigPath);
           if (!hasTsconfig) {

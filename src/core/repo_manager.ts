@@ -72,6 +72,7 @@ export class RepoManager {
       config,
       this.options,
       this.logger,
+      this.fileSystem,
     );
   }
 
