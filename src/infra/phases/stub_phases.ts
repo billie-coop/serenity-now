@@ -57,6 +57,7 @@ function createImportScanner(): ImportScannerPort {
       _config: SyncConfig,
       _options: RepoManagerOptions,
       logger,
+      _fs,
     ): Promise<ProjectUsage> => {
       logger.warn(
         "Import scanner adapter not implemented yet. Returning empty usage.",

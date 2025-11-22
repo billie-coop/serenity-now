@@ -47,6 +47,7 @@ export interface ImportScannerPort {
     config: SyncConfig,
     options: RepoManagerOptions,
     logger: LoggerPort,
+    fs: FileSystemPort,
   ): Promise<ProjectUsage>;
 }
 

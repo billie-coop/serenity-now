@@ -91,7 +91,13 @@ function makeTestDeps(log: string[]): RepoManagerDeps {
       },
     },
     importScanner: {
-      scan: (): Promise<ProjectUsage> => {
+      scan: (
+        _inventory: ProjectInventory,
+        _config: SyncConfig,
+        _options: RepoManagerOptions,
+        _logger,
+        _fs,
+      ): Promise<ProjectUsage> => {
         log.push("import-scan");
         return Promise.resolve({ usage: {}, warnings: [] });
       },

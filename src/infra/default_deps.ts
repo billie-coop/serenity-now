@@ -4,6 +4,7 @@ import { denoFileSystem } from "./fs/deno_fs.ts";
 import { createStubPhasePorts } from "./phases/stub_phases.ts";
 import { createConfigLoader } from "./phases/config_loader.ts";
 import { createWorkspaceDiscovery } from "./phases/workspace_discovery.ts";
+import { createImportScanner } from "./phases/import_scanner.ts";
 
 interface DefaultDepsOptions {
   verbose?: boolean;
@@ -20,6 +21,7 @@ export function createDefaultDeps(
       ...stubPhases,
       configLoader: createConfigLoader(),
       workspaceDiscovery: createWorkspaceDiscovery(),
+      importScanner: createImportScanner(),
     },
   };
 }

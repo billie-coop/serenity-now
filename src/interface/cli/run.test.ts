@@ -104,6 +104,7 @@ function createFakeDeps(
         _config: SyncConfig,
         _options: RepoManagerOptions,
         _logger: RepoManagerDeps["logger"],
+        _fs: RepoManagerDeps["fileSystem"],
       ): Promise<ProjectUsage> => Promise.resolve(usage),
     },
     graphResolver: {
