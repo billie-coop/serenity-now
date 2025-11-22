@@ -57,6 +57,7 @@ function makeTestDeps(log: string[]): RepoManagerDeps {
     warn: () => {},
     error: () => {},
     debug: () => {},
+    getWarnings: () => [],
   };
 
   const fileSystem = {
