@@ -4,7 +4,7 @@
   "exports": "./mod.ts",
   "nodeModulesDir": "auto",
   "tasks": {
-    "check": "deno fmt && deno lint && deno check **/*.ts **/*.test.ts **/*.spec.ts",
+    "check": "deno fmt && deno lint && deno check **/*.ts **/*.test.ts",
     "fmt": "deno fmt",
     "lint": "deno lint",
     "test": "rm -rf coverage && deno test --allow-all --coverage=coverage && deno coverage coverage --include=\"^file:.*/src/\" && deno coverage coverage --include=\"^file:.*/src/\" --html",
