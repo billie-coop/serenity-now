@@ -1,5 +1,4 @@
 import { runCli } from "./run.ts";
-import type { RepoManagerDeps } from "../../core/ports.ts";
 import type {
   EmitResult,
   ProjectInventory,
@@ -8,6 +7,12 @@ import type {
   ResolvedGraph,
   SyncConfig,
 } from "../../core/types.ts";
+import type {
+  FileSystemPort,
+  LoggerPort,
+  PhasePorts,
+  RepoManagerDeps,
+} from "../../core/ports.ts";
 
 function assert(condition: boolean, message: string): asserts condition {
   if (!condition) {
@@ -34,7 +39,14 @@ interface FakePhaseOutputs {
 
 function createFakeDeps(
   overrides: FakePhaseOutputs = {},
-): { deps: RepoManagerDeps; warnings: string[] } {
+): {
+  deps: {
+    logger: LoggerPort;
+    fileSystem: FileSystemPort;
+    phases: PhasePorts;
+  };
+  warnings: string[];
+} {
   const warnings: string[] = [];
 
   const logger = {

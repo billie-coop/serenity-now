@@ -7,7 +7,7 @@
     "check": "deno fmt && deno lint && deno check **/*.ts **/*.test.ts",
     "fmt": "deno fmt",
     "lint": "deno lint",
-    "test": "rm -rf coverage && deno test --allow-all --coverage=coverage && deno coverage coverage --include=\"^file:.*/src/\" && deno coverage coverage --include=\"^file:.*/src/\" --html",
+    "test": "rm -rf coverage && deno test --allow-all --coverage=coverage && deno coverage coverage --include=\"^file:.*/src/\" --html",
     "test:watch": "deno test --allow-all --watch",
     "dev": "deno run --watch --allow-read --allow-write --allow-env cli.ts",
     "start": "deno run --allow-read --allow-write --allow-env cli.ts",
