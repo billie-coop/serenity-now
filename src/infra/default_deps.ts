@@ -6,6 +6,7 @@ import { createConfigLoader } from "./phases/config_loader.ts";
 import { createWorkspaceDiscovery } from "./phases/workspace_discovery.ts";
 import { createImportScanner } from "./phases/import_scanner.ts";
 import { createGraphResolver } from "./phases/graph_resolver.ts";
+import { createChangeEmitter } from "./phases/change_emitter.ts";
 
 interface DefaultDepsOptions {
   verbose?: boolean;
@@ -24,6 +25,7 @@ export function createDefaultDeps(
       workspaceDiscovery: createWorkspaceDiscovery(),
       importScanner: createImportScanner(),
       graphResolver: createGraphResolver(),
+      changeEmitter: createChangeEmitter(),
     },
   };
 }
