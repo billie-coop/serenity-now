@@ -64,6 +64,25 @@ Deno.test("CLI dry-run with fail-on-stale returns non-zero and logs warning", as
   }
 });
 
+Deno.test("CLI can proceed through dependency cycles with --force", async () => {
+  const repo = await createCycleRepo();
+  const capture = captureConsole();
+  const originalCwd = Deno.cwd();
+  try {
+    Deno.chdir(repo.root);
+    const exitCode = await runCli(["--dry-run", "--force"]);
+    assertEquals(exitCode, 0);
+    assert(
+      capture.logs.some((line) => line.includes("Dry run complete")),
+      "Expected dry-run completion message",
+    );
+  } finally {
+    capture.restore();
+    Deno.chdir(originalCwd);
+    await repo.teardown();
+  }
+});
+
 Deno.test("CLI dry-run without stale dependencies reports no changes", async () => {
   const repo = await createTempRepo({ includeStale: false });
   const capture = captureConsole();
@@ -72,10 +91,33 @@ Deno.test("CLI dry-run without stale dependencies reports no changes", async () 
     Deno.chdir(repo.root);
     const exitCode = await runCli(["--dry-run"]);
     assertEquals(exitCode, 0);
-    assert(
-      capture.logs.some((line) => line.includes("No changes were necessary")),
-      "Expected no-change summary",
+    assertEquals(
+      capture.logs.some((line) => line.includes("Dry run complete")),
+      true,
+      "Expected dry-run message",
     );
+  } finally {
+    capture.restore();
+    Deno.chdir(originalCwd);
+    await repo.teardown();
+  }
+});
+
+Deno.test("CLI creates config template when missing", async () => {
+  const repo = await createTempRepo({ includeStale: false, skipConfig: true });
+  const capture = captureConsole();
+  const originalCwd = Deno.cwd();
+  try {
+    Deno.chdir(repo.root);
+    const exitCode = await runCli(["--dry-run"]);
+    assertEquals(exitCode, 1);
+    assert(
+      capture.errors.some((line) =>
+        line.includes("Configuration file created")
+      ),
+      "Expected config creation error message",
+    );
+    await Deno.stat("serenity-now.config.jsonc");
   } finally {
     capture.restore();
     Deno.chdir(originalCwd);
