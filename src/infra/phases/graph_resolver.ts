@@ -24,7 +24,7 @@ interface GraphResolverDeps {
   ) => Promise<EntryPointInfo>;
 }
 
-async function defaultEntryPointResolver(
+export async function defaultEntryPointResolver(
   project: ProjectInfo,
   fs: FileSystemPort,
 ): Promise<EntryPointInfo> {
@@ -72,7 +72,15 @@ async function defaultEntryPointResolver(
     }
     // Handle object exports
     if (typeof exports === "object" && !Array.isArray(exports)) {
-      const defaultExport = exports["."] ?? exports.default ?? exports.import;
+      let defaultExport = exports["."] ?? exports.default ?? exports.import;
+
+      // Handle nested conditional exports: { ".": { "import": "...", "require": "...", "types": "..." } }
+      if (typeof defaultExport === "object" && !Array.isArray(defaultExport)) {
+        // Prefer import over require for ESM compatibility
+        defaultExport = defaultExport.import ?? defaultExport.require ??
+          defaultExport.types ?? defaultExport.default;
+      }
+
       if (typeof defaultExport === "string") {
         const fullPath = join(project.root, defaultExport);
         const exists = await fs.fileExists(fullPath);
@@ -310,6 +318,11 @@ export function createGraphResolver(
         const dependencies: Record<string, ResolvedDependency> = {};
 
         for (const depId of collectDependencies(usageRecord)) {
+          // Skip self-references (internal imports within the same package)
+          if (depId === projectId) {
+            continue;
+          }
+
           const dependencyProject = inventory.projects[depId];
           if (!dependencyProject) {
             warnings.push(

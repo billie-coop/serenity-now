@@ -31,21 +31,8 @@ const DEFAULT_EXTENSIONS = [
   ".jsx",
 ];
 
-const DEFAULT_EXCLUDE_PATTERNS = [
-  "**/node_modules/**",
-  "**/dist/**",
-  "**/.turbo/**",
-  "**/.moon/**",
-  "**/build/**",
-  "**/out/**",
-  "**/coverage/**",
-  "**/.next/**",
-  "**/__tests__/**",
-  "**/*.test.ts",
-  "**/*.test.tsx",
-  "**/*.spec.ts",
-  "**/*.spec.tsx",
-];
+// No hard-coded defaults - users must explicitly configure excludePatterns
+// See config template for suggested patterns
 
 function createDefaultWalker(): FileWalker {
   return async function* (root: string) {
@@ -111,23 +98,21 @@ function shouldProcessFile(path: string): boolean {
 }
 
 function matchesPattern(value: string, pattern: string): boolean {
-  if (pattern.includes("*")) {
-    const regex = new RegExp(`^${pattern.replace(/\*/g, ".*")}$`);
-    return regex.test(value);
-  }
-  return value === pattern || value.startsWith(`${pattern}/`);
+  // Use globToRegExp for consistent pattern matching with proper directory boundaries
+  const regex = globToRegExp(pattern, { extended: true, globstar: true });
+  return regex.test(value);
 }
 
 function shouldExcludeFile(relativePath: string, config: SyncConfig): boolean {
+  // Only use explicitly configured exclude patterns - no implicit defaults
+  if (!config.excludePatterns || config.excludePatterns.length === 0) {
+    return false;
+  }
+
   // Normalize path separators to forward slashes for consistent matching across platforms
   const normalizedPath = relativePath.replace(/\\/g, "/");
 
-  const excludePatterns = [
-    ...DEFAULT_EXCLUDE_PATTERNS,
-    ...(config.excludePatterns ?? []),
-  ];
-
-  return excludePatterns.some((pattern) => {
+  return config.excludePatterns.some((pattern) => {
     // Use Deno's standard library for proper glob-to-regex conversion
     // This correctly handles directory boundaries and doesn't match substrings
     const regex = globToRegExp(pattern, { extended: true, globstar: true });

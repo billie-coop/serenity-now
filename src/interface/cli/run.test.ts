@@ -225,3 +225,161 @@ Deno.test("runCli respects fail-on-stale option", async () => {
     consoleCapture.restore();
   }
 });
+
+Deno.test("runCli exits with error code 2 when cycles detected without --force", async () => {
+  const graphWithCycles: ResolvedGraph = {
+    projects: {},
+    cycles: [
+      {
+        path: ["@repo/a", "@repo/b", "@repo/a"],
+        projects: [],
+      },
+    ],
+    diamonds: [],
+    warnings: [],
+  };
+
+  const { deps } = createFakeDeps({ graph: graphWithCycles });
+  const consoleCapture = captureConsole();
+  try {
+    const exitCode = await runCli([], () => deps);
+    assertEquals(exitCode, 2, "should exit with code 2 for cycles");
+    assert(
+      consoleCapture.errors.some((line) =>
+        line.includes("circular dependency")
+      ),
+      "expected cycle error message",
+    );
+    assert(
+      consoleCapture.errors.some((line) => line.includes("--force")),
+      "expected suggestion to use --force",
+    );
+  } finally {
+    consoleCapture.restore();
+  }
+});
+
+Deno.test("runCli continues with warning when cycles detected with --force", async () => {
+  const graphWithCycles: ResolvedGraph = {
+    projects: {},
+    cycles: [
+      {
+        path: ["@repo/a", "@repo/b", "@repo/a"],
+        projects: [],
+      },
+    ],
+    diamonds: [],
+    warnings: [],
+  };
+
+  const { deps } = createFakeDeps({ graph: graphWithCycles });
+  const consoleCapture = captureConsole();
+  try {
+    const exitCode = await runCli(["--force"], () => deps);
+    assertEquals(exitCode, 0, "should exit with code 0 with --force");
+    assert(
+      consoleCapture.logs.some((line) =>
+        line.includes("Warning") && line.includes("circular")
+      ),
+      "expected cycle warning",
+    );
+  } finally {
+    consoleCapture.restore();
+  }
+});
+
+Deno.test("runCli displays diamond dependencies in verbose mode", async () => {
+  const graphWithDiamonds: ResolvedGraph = {
+    projects: {},
+    cycles: [],
+    diamonds: [
+      {
+        projectId: "@repo/app",
+        directDependency: "@repo/utils",
+        transitiveThrough: ["@repo/lib"],
+        pattern: "universal-utility",
+        suggestion:
+          "This is expected - @repo/utils is designed to be used everywhere.",
+      },
+    ],
+    warnings: [],
+  };
+
+  const { deps } = createFakeDeps({ graph: graphWithDiamonds });
+  const consoleCapture = captureConsole();
+  try {
+    const exitCode = await runCli(["--verbose"], () => deps);
+    assertEquals(exitCode, 0);
+    assert(
+      consoleCapture.logs.some((line) => line.includes("Diamond Dependencies")),
+      "expected diamond dependencies section",
+    );
+    assert(
+      consoleCapture.logs.some((line) => line.includes("@repo/app")),
+      "expected project name in diamond output",
+    );
+    assert(
+      consoleCapture.logs.some((line) => line.includes("@repo/utils")),
+      "expected dependency name in diamond output",
+    );
+  } finally {
+    consoleCapture.restore();
+  }
+});
+
+Deno.test("runCli displays analytics in verbose mode", async () => {
+  const inventory: ProjectInventory = {
+    projects: {
+      "@repo/app": {
+        id: "@repo/app",
+        root: "/repo/apps/app",
+        relativeRoot: "apps/app",
+        packageJson: { name: "@repo/app" },
+        workspaceType: "app",
+        workspaceSubType: "website",
+        isPrivate: true,
+      },
+      "@repo/lib": {
+        id: "@repo/lib",
+        root: "/repo/packages/lib",
+        relativeRoot: "packages/lib",
+        packageJson: { name: "@repo/lib" },
+        workspaceType: "shared-package",
+        workspaceSubType: "library",
+        isPrivate: false,
+      },
+    },
+    warnings: [],
+    workspaceConfigs: {},
+  };
+
+  const usage: ProjectUsage = {
+    usage: {
+      "@repo/app": {
+        dependencies: ["@repo/lib"],
+        typeOnlyDependencies: [],
+        usageDetails: [],
+      },
+    },
+    warnings: [],
+  };
+
+  const { deps } = createFakeDeps({ inventory, usage });
+  const consoleCapture = captureConsole();
+  try {
+    const exitCode = await runCli(["--verbose"], () => deps);
+    assertEquals(exitCode, 0);
+    assert(
+      consoleCapture.logs.some((line) => line.includes("Import Analysis")),
+      "expected import analysis section",
+    );
+    assert(
+      consoleCapture.logs.some((line) =>
+        line.includes("Dependency Graph Analysis")
+      ),
+      "expected graph analysis section",
+    );
+  } finally {
+    consoleCapture.restore();
+  }
+});

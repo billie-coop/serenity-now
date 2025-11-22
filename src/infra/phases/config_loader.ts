@@ -66,6 +66,26 @@ const CONFIG_TEMPLATE = `{
     // Example: "react", "node:*"
   ],
 
+  // Optional: File patterns to exclude from scanning (glob syntax)
+  // Uncomment and customize as needed:
+  // "excludePatterns": [
+  //   "**/node_modules/**",
+  //   "**/dist/**",
+  //   "**/build/**",
+  //   "**/out/**",
+  //   "**/coverage/**",
+  //   "**/.turbo/**",
+  //   "**/.next/**",
+  //   "**/__tests__/**",
+  //   "**/*.test.ts",
+  //   "**/*.test.tsx",
+  //   "**/*.spec.ts",
+  //   "**/*.spec.tsx"
+  // ],
+
+  // Optional: Universal utility packages (won't be flagged as diamond dependencies)
+  // "universalUtilities": [],
+
   // Optional: TypeScript configuration defaults
   "tsconfig": {
     // Enable incremental compilation with project references (recommended)
