@@ -23,14 +23,17 @@ export interface TempRepo {
   teardown(): Promise<void>;
 }
 
-interface TempRepoOptions {
+export interface TempRepoOptions {
   includeStale?: boolean;
+  missingTsconfig?: boolean;
+  defaultDependencies?: string[];
 }
 
 export async function createTempRepo(
   options: TempRepoOptions = {},
 ): Promise<TempRepo> {
   const includeStale = options.includeStale ?? true;
+  const missingTsconfig = options.missingTsconfig ?? false;
   const root = await Deno.makeTempDir({ prefix: "serenity-integration-" });
 
   await writeJsonFile(join(root, "package.json"), {
@@ -47,6 +50,7 @@ export async function createTempRepo(
           "apps/*": { type: "app", subType: "website" },
           "packages/*": { type: "shared-package" },
         },
+        defaultDependencies: options.defaultDependencies,
       },
       null,
       2,
@@ -69,18 +73,20 @@ export async function createTempRepo(
         lodash: "^4.17.0",
       },
   });
-  await writeJsonFile(appTsconfig, {
-    compilerOptions: {
-      baseUrl: ".",
-      paths: includeStale ? { "@repo/unused": ["../unused/src/index.ts"] } : {
-        "@repo/lib": ["../../packages/lib/src/index.ts"],
-        "@repo/lib/*": ["../../packages/lib/src/*"],
+  if (!missingTsconfig) {
+    await writeJsonFile(appTsconfig, {
+      compilerOptions: {
+        baseUrl: ".",
+        paths: includeStale ? { "@repo/unused": ["../unused/src/index.ts"] } : {
+          "@repo/lib": ["../../packages/lib/src/index.ts"],
+          "@repo/lib/*": ["../../packages/lib/src/*"],
+        },
       },
-    },
-    references: includeStale
-      ? [{ path: "../unused" }]
-      : [{ path: "../../packages/lib" }],
-  });
+      references: includeStale
+        ? [{ path: "../unused" }]
+        : [{ path: "../../packages/lib" }],
+    });
+  }
   const staleImport = includeStale ? 'import "@repo/unused";\n' : "";
   await writeTextFile(
     join(appDir, "src/main.ts"),
@@ -182,6 +188,61 @@ export function captureConsole() {
     restore() {
       console.log = originalLog;
       console.error = originalError;
+    },
+  };
+}
+
+export async function createDiamondRepo(): Promise<TempRepo> {
+  const root = await Deno.makeTempDir({ prefix: "serenity-diamond-" });
+
+  await writeJsonFile(join(root, "package.json"), {
+    name: "serenity-diamond",
+    private: true,
+    workspaces: ["apps/*", "packages/*"],
+  });
+
+  await writeJsonFile(join(root, "serenity-now.config.jsonc"), {
+    workspaceTypes: {
+      "apps/*": { type: "app" },
+      "packages/*": { type: "shared-package" },
+    },
+  });
+
+  const writePackage = async (dir: string, name: string, code: string) => {
+    await writeJsonFile(join(dir, "package.json"), { name, version: "0.0.0" });
+    await writeJsonFile(join(dir, "tsconfig.json"), { compilerOptions: {} });
+    await writeTextFile(join(dir, "src/index.ts"), code);
+  };
+
+  await writePackage(
+    join(root, "packages/utils"),
+    "@repo/utils",
+    `export const utils = 1;`,
+  );
+  await writePackage(
+    join(root, "packages/feature"),
+    "@repo/feature",
+    `import { utils } from "@repo/utils";
+export const feature = utils + 1;`,
+  );
+  await writePackage(
+    join(root, "packages/shared"),
+    "@repo/shared",
+    `import { utils } from "@repo/utils";
+export const shared = utils + 2;`,
+  );
+  await writePackage(
+    join(root, "apps/web"),
+    "@repo/web",
+    `import { feature } from "@repo/feature";
+import { shared } from "@repo/shared";
+export const result = feature + shared;`,
+  );
+
+  return {
+    root,
+    async teardown() {
+      await Deno.remove(root, { recursive: true });
     },
   };
 }
