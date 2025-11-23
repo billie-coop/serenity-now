@@ -112,6 +112,10 @@ export class RepoManager {
     return this.options.failOnStale ?? false;
   }
 
+  getConfig(): SyncConfig {
+    return this.ensureConfigLoaded();
+  }
+
   private ensureConfigLoaded(): SyncConfig {
     if (!this.config) {
       throw new Error("Configuration must be loaded before running this phase");

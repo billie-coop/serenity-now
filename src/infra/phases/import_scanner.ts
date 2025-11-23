@@ -207,16 +207,32 @@ function matchesPattern(value: string, pattern: string): boolean {
   return regex.test(value);
 }
 
+// Default patterns to exclude from scanning
+const DEFAULT_EXCLUDE_PATTERNS = [
+  "**/node_modules/**",
+  "**/dist/**",
+  "**/build/**",
+  "**/out/**",
+  "**/coverage/**",
+  "**/.turbo/**",
+  "**/.next/**",
+  "**/.nuxt/**",
+  "**/.output/**",
+  "**/.vercel/**",
+  "**/.netlify/**",
+];
+
 function shouldExcludeFile(relativePath: string, config: SyncConfig): boolean {
-  // Only use explicitly configured exclude patterns - no implicit defaults
-  if (!config.excludePatterns || config.excludePatterns.length === 0) {
-    return false;
-  }
+  // Combine default excludes with user-configured patterns
+  const excludePatterns = [
+    ...DEFAULT_EXCLUDE_PATTERNS,
+    ...(config.excludePatterns || []),
+  ];
 
   // Normalize path separators to forward slashes for consistent matching across platforms
   const normalizedPath = relativePath.replace(/\\/g, "/");
 
-  return config.excludePatterns.some((pattern) => {
+  return excludePatterns.some((pattern) => {
     // Use Deno's standard library for proper glob-to-regex conversion
     // This correctly handles directory boundaries and doesn't match substrings
     const regex = globToRegExp(pattern, { extended: true, globstar: true });

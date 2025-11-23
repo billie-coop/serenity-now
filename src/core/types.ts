@@ -13,6 +13,7 @@ export interface RepoManagerOptions {
   verbose?: boolean;
   failOnStale?: boolean;
   force?: boolean;
+  health?: boolean;
 }
 
 export type WorkspaceSubType =

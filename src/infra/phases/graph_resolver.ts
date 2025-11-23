@@ -93,13 +93,25 @@ export async function defaultEntryPointResolver(
           rootExport.types,
         ].filter((value): value is string => typeof value === "string");
 
+        // Try each candidate and return the first one that exists
         for (const candidate of candidates) {
           const fullPath = join(project.root, candidate);
           const exists = await fs.fileExists(fullPath);
+          if (exists) {
+            return {
+              path: candidate,
+              exists: true,
+              isTypeDefinition: candidate.endsWith(".d.ts"),
+            };
+          }
+        }
+
+        // If none exist, return the first candidate with exists=false
+        if (candidates.length > 0) {
           return {
-            path: candidate,
-            exists,
-            isTypeDefinition: candidate.endsWith(".d.ts"),
+            path: candidates[0]!,
+            exists: false,
+            isTypeDefinition: candidates[0]!.endsWith(".d.ts"),
           };
         }
       }

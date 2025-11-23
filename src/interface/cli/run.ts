@@ -16,6 +16,7 @@ interface CliArgs {
   config?: string;
   failOnStale?: boolean;
   force?: boolean;
+  health?: boolean;
 }
 
 function parseCliArgs(rawArgs: string[]): CliArgs {
@@ -26,6 +27,7 @@ function parseCliArgs(rawArgs: string[]): CliArgs {
       "verbose",
       "fail-on-stale",
       "force",
+      "health",
       "h",
       "d",
       "v",
@@ -48,6 +50,7 @@ function parseCliArgs(rawArgs: string[]): CliArgs {
     config: typeof parsed.config === "string" ? parsed.config : undefined,
     failOnStale: Boolean(parsed["fail-on-stale"]),
     force: Boolean(parsed.force),
+    health: Boolean(parsed.health),
   };
 }
 
@@ -63,6 +66,7 @@ Options:
   --config, -c <path>  Path to configuration file
   --fail-on-stale      Exit with error if stale dependencies are found
   --force, -f          Continue even with circular dependencies
+  --health             Show detailed health report for monorepo cleanup
   --help, -h           Show this help message
 `);
 }
@@ -173,6 +177,113 @@ function analyzeGraph(graph: ResolvedGraph): void {
   }
 }
 
+function printHealthReport(
+  graph: ResolvedGraph,
+  inventory: ProjectInventory,
+  config: { defaultDependencies?: string[] },
+): void {
+  console.log("\n═══ Health Check ═══\n");
+
+  const defaultDeps = new Set(config.defaultDependencies || []);
+
+  // Group diamonds by package
+  const diamondsByPackage = new Map<
+    string,
+    Array<{ projectId: string; transitiveThrough: string[] }>
+  >();
+
+  for (const diamond of graph.diamonds) {
+    if (!diamondsByPackage.has(diamond.directDependency)) {
+      diamondsByPackage.set(diamond.directDependency, []);
+    }
+    diamondsByPackage.get(diamond.directDependency)!.push({
+      projectId: diamond.projectId,
+      transitiveThrough: diamond.transitiveThrough,
+    });
+  }
+
+  // Separate universal utilities from actionable diamonds
+  const universalDiamonds: Array<[string, number]> = [];
+  const actionableDiamonds: Array<
+    [string, Array<{ projectId: string; transitiveThrough: string[] }>]
+  > = [];
+
+  for (const [pkg, occurrences] of diamondsByPackage.entries()) {
+    if (defaultDeps.has(pkg)) {
+      universalDiamonds.push([pkg, occurrences.length]);
+    } else {
+      actionableDiamonds.push([pkg, occurrences]);
+    }
+  }
+
+  // Sort by occurrence count
+  actionableDiamonds.sort((a, b) => b[1].length - a[1].length);
+
+  const totalActionable = actionableDiamonds.reduce(
+    (sum, [, occurrences]) => sum + occurrences.length,
+    0,
+  );
+
+  console.log(
+    `Diamond Dependencies (${totalActionable} total, excluding universal utilities):\n`,
+  );
+
+  // Show actionable diamonds
+  for (const [pkg, occurrences] of actionableDiamonds.slice(0, 10)) {
+    console.log(`${pkg} (${occurrences.length} occurrences):`);
+    for (const { projectId, transitiveThrough } of occurrences.slice(0, 3)) {
+      const throughList = transitiveThrough.length > 3
+        ? `${transitiveThrough.slice(0, 3).join(", ")}, ...`
+        : transitiveThrough.join(", ");
+      console.log(`  - ${projectId}: direct + via [${throughList}]`);
+    }
+    if (occurrences.length > 3) {
+      console.log(`  ... and ${occurrences.length - 3} more`);
+    }
+    console.log();
+  }
+
+  if (actionableDiamonds.length > 10) {
+    console.log(
+      `... and ${actionableDiamonds.length - 10} more packages with diamonds\n`,
+    );
+  }
+
+  // Show universal utilities summary
+  if (universalDiamonds.length > 0) {
+    console.log("Universal utilities (configured as defaultDependencies):");
+    for (const [pkg, count] of universalDiamonds) {
+      console.log(`  - ${pkg}: ${count} occurrences (expected)`);
+    }
+    console.log();
+  }
+
+  // Show other warnings
+  const missingTsconfig = inventory.warnings.filter((w) =>
+    w.includes("missing tsconfig")
+  );
+  if (missingTsconfig.length > 0) {
+    console.log("Missing tsconfig.json:");
+    for (const warning of missingTsconfig) {
+      const match = warning.match(/Project (.+) at (.+) is missing/);
+      if (match) {
+        console.log(`  - ${match[1]} (${match[2]})`);
+      }
+    }
+    console.log();
+  }
+
+  if (graph.cycles.length > 0) {
+    console.log(`⚠️  Circular Dependencies: ${graph.cycles.length} detected`);
+    for (const cycle of graph.cycles) {
+      console.log(`  - ${cycle.path.join(" → ")}`);
+    }
+    console.log();
+  } else {
+    console.log("✓ No circular dependencies\n");
+  }
+}
+
 export async function runCli(
   rawArgs: string[] = Deno.args,
   depsFactory: DepsFactory = defaultDepsFactory,
@@ -191,6 +302,7 @@ export async function runCli(
     verbose: args.verbose,
     failOnStale: args.failOnStale,
     force: args.force,
+    health: args.health,
   };
 
   const deps = depsFactory(repoOptions);
@@ -232,6 +344,13 @@ export async function runCli(
           console.log(`  Cycle: ${cycle.path.join(" → ")}`);
         }
       }
+    }
+
+    // Show health report if requested
+    if (repoOptions.health) {
+      const config = await manager.getConfig();
+      printHealthReport(graph, inventory, config);
+      return 0;
     }
 
     console.log("\n═══ Emitting Changes ═══\n");
