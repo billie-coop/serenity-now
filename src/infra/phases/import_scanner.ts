@@ -58,7 +58,111 @@ interface SpecifierMatch {
   isTypeOnly: boolean;
 }
 
-function parseSpecifiers(source: string): SpecifierMatch[] {
+/**
+ * Strips comments from source code while respecting strings and template literals.
+ * This prevents false positives from commented-out imports.
+ */
+function stripComments(source: string): string {
+  let result = "";
+  let i = 0;
+
+  while (i < source.length) {
+    const char = source[i];
+    const next = source[i + 1];
+
+    // Skip single-line comments
+    if (char === "/" && next === "/") {
+      // Skip until end of line
+      while (i < source.length && source[i] !== "\n") {
+        i++;
+      }
+      if (i < source.length) {
+        result += "\n"; // Preserve line structure
+        i++;
+      }
+      continue;
+    }
+
+    // Skip multi-line comments
+    if (char === "/" && next === "*") {
+      i += 2;
+      while (i < source.length - 1) {
+        if (source[i] === "\n") {
+          result += "\n"; // Preserve lines
+        }
+        if (source[i] === "*" && source[i + 1] === "/") {
+          i += 2;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
+
+    // Preserve strings (single quote)
+    if (char === "'") {
+      result += char;
+      i++;
+      while (i < source.length) {
+        result += source[i];
+        if (source[i] === "\\") {
+          i++;
+          if (i < source.length) result += source[i];
+        } else if (source[i] === "'") {
+          i++;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
+
+    // Preserve strings (double quote)
+    if (char === '"') {
+      result += char;
+      i++;
+      while (i < source.length) {
+        result += source[i];
+        if (source[i] === "\\") {
+          i++;
+          if (i < source.length) result += source[i];
+        } else if (source[i] === '"') {
+          i++;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
+
+    // Preserve template literals
+    if (char === "`") {
+      result += char;
+      i++;
+      while (i < source.length) {
+        result += source[i];
+        if (source[i] === "\\") {
+          i++;
+          if (i < source.length) result += source[i];
+        } else if (source[i] === "`") {
+          i++;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
+
+    result += char;
+    i++;
+  }
+
+  return result;
+}
+
+function parseSpecifiers(source: string, _filePath: string): SpecifierMatch[] {
+  // Strip comments first to avoid false positives
+  const cleanedSource = stripComments(source);
   const results: SpecifierMatch[] = [];
 
   const scanWith = (
@@ -67,7 +171,7 @@ function parseSpecifiers(source: string): SpecifierMatch[] {
   ) => {
     regex.lastIndex = 0;
     let match;
-    while ((match = regex.exec(source)) !== null) {
+    while ((match = regex.exec(cleanedSource)) !== null) {
       const full = match[0] ?? "";
       const specifier = match[match.length - 1] ?? "";
       if (!specifier) continue;
@@ -187,7 +291,7 @@ async function scanProjectFiles(
 
     try {
       const content = await readFile(entry.path, fs);
-      const specifiers = parseSpecifiers(content);
+      const specifiers = parseSpecifiers(content, entry.path);
       for (const { specifier, isTypeOnly } of specifiers) {
         if (!isExternal(specifier) || shouldIgnore(specifier, config)) {
           continue;
@@ -243,10 +347,22 @@ export function createImportScanner(
       }
 
       usage.warnings = warnings;
+
+      const totalImports = Object.values(usage.usage).reduce(
+        (sum, record) =>
+          sum + record.dependencies.length + record.typeOnlyDependencies.length,
+        0,
+      );
+      const projectsWithImports = Object.values(usage.usage).filter(
+        (record) =>
+          record.dependencies.length > 0 ||
+          record.typeOnlyDependencies.length > 0,
+      ).length;
+
       logger.info(
-        `Scanned imports for ${
+        `✅ Scanned ${
           Object.keys(inventory.projects).length
-        } project(s)`,
+        } projects, found ${totalImports} workspace imports across ${projectsWithImports} projects`,
       );
       return usage;
     },

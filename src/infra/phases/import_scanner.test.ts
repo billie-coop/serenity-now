@@ -150,3 +150,100 @@ Deno.test("import scanner respects ignore list and defaults", async () => {
   assert(record !== undefined, "Usage record missing");
   assertEquals(record.dependencies.sort(), ["@repo/env", "foo"]);
 });
+
+Deno.test("import scanner ignores imports in single-line comments", async () => {
+  const fs = new InMemoryFileSystem({
+    "/repo/apps/app/index.ts": `
+      // import { Foo } from '@billie-coop/should-ignore';
+      // NOTE: RenderedInvoice type moved to @billie-coop/data-sync-lite-invoice
+      import { Bar } from 'real-import';
+    `,
+  });
+  const walker = createWalker([{ path: "/repo/apps/app/index.ts" }]);
+  const scanner = createImportScanner({ walker });
+
+  const usage = await scanner.scan(
+    baseInventory,
+    baseConfig,
+    {} as RepoManagerOptions,
+    createLogger(),
+    fs,
+  );
+
+  const record = usage.usage["@repo/app"];
+  assert(record !== undefined, "Usage record missing");
+  assertEquals(record.dependencies, ["real-import"]);
+});
+
+Deno.test("import scanner ignores imports in multi-line comments", async () => {
+  const fs = new InMemoryFileSystem({
+    "/repo/apps/app/index.ts": `
+      /*
+       * import { Foo } from '@billie-coop/should-ignore';
+       * This is a comment
+       */
+      import { Bar } from 'real-import';
+    `,
+  });
+  const walker = createWalker([{ path: "/repo/apps/app/index.ts" }]);
+  const scanner = createImportScanner({ walker });
+
+  const usage = await scanner.scan(
+    baseInventory,
+    baseConfig,
+    {} as RepoManagerOptions,
+    createLogger(),
+    fs,
+  );
+
+  const record = usage.usage["@repo/app"];
+  assert(record !== undefined, "Usage record missing");
+  assertEquals(record.dependencies, ["real-import"]);
+});
+
+Deno.test("import scanner handles webpack magic comments", async () => {
+  const fs = new InMemoryFileSystem({
+    "/repo/apps/app/index.ts": `
+      import(/* webpackChunkName: "foo" */ './dynamic');
+    `,
+  });
+  const walker = createWalker([{ path: "/repo/apps/app/index.ts" }]);
+  const scanner = createImportScanner({ walker });
+
+  const usage = await scanner.scan(
+    baseInventory,
+    baseConfig,
+    {} as RepoManagerOptions,
+    createLogger(),
+    fs,
+  );
+
+  const record = usage.usage["@repo/app"];
+  assert(record !== undefined, "Usage record missing");
+  // Dynamic import with relative path should be filtered (not external)
+  assertEquals(record.dependencies, []);
+});
+
+Deno.test("import scanner preserves URLs and comment-like content in strings", async () => {
+  const fs = new InMemoryFileSystem({
+    "/repo/apps/app/index.ts": `
+      const url = "http://example.com";
+      const str = "/* not a comment */";
+      import { Foo } from 'real-import';
+    `,
+  });
+  const walker = createWalker([{ path: "/repo/apps/app/index.ts" }]);
+  const scanner = createImportScanner({ walker });
+
+  const usage = await scanner.scan(
+    baseInventory,
+    baseConfig,
+    {} as RepoManagerOptions,
+    createLogger(),
+    fs,
+  );
+
+  const record = usage.usage["@repo/app"];
+  assert(record !== undefined, "Usage record missing");
+  assertEquals(record.dependencies, ["real-import"]);
+});

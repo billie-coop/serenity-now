@@ -196,10 +196,19 @@ export async function runCli(
   const deps = depsFactory(repoOptions);
   const manager = new RepoManager(repoOptions, deps);
 
+  console.log("🔧 Syncing monorepo dependencies...\n");
+
   try {
+    console.log("\n═══ Loading Configuration ═══\n");
     await manager.loadConfig();
+
+    console.log("\n═══ Discovering Workspace ═══\n");
     const inventory = await manager.discoverWorkspace();
+
+    console.log("\n═══ Scanning Imports ═══\n");
     const usage = await manager.scanImports(inventory);
+
+    console.log("\n═══ Resolving Dependency Graph ═══\n");
     const graph = await manager.resolveGraph(inventory, usage);
 
     // Check for circular dependencies
@@ -225,10 +234,13 @@ export async function runCli(
       }
     }
 
+    console.log("\n═══ Emitting Changes ═══\n");
     const emitResult = await manager.emitChanges(graph, inventory);
 
     if (repoOptions.verbose) {
+      console.log("\n▶ Import Analysis");
       analyzeImportUsage(usage, inventory);
+      console.log("\n▶ Dependency Graph Analysis");
       analyzeGraph(graph);
     }
 
@@ -241,13 +253,13 @@ export async function runCli(
     ];
 
     if (graph.diamonds.length > 0 && repoOptions.verbose) {
-      console.log("\nDiamond Dependencies:");
+      console.log("\n▶ Diamond Dependencies");
       for (const diamond of graph.diamonds) {
-        console.log(`\n  ${diamond.projectId}:`);
-        console.log(`    Direct dependency: ${diamond.directDependency}`);
-        console.log(`    Also via: ${diamond.transitiveThrough.join(", ")}`);
-        console.log(`    Pattern: ${diamond.pattern}`);
-        console.log(`    → ${diamond.suggestion}`);
+        console.log(`\n  📦 ${diamond.projectId}:`);
+        console.log(`      → ${diamond.directDependency}`);
+        console.log(
+          `        (also via: ${diamond.transitiveThrough.join(", ")})`,
+        );
       }
     }
 
@@ -258,12 +270,19 @@ export async function runCli(
       }
     }
 
+    console.log("\n═══ Summary ═══");
+    console.log(
+      `  Projects scanned: ${Object.keys(inventory.projects).length}`,
+    );
     if (repoOptions.dryRun) {
-      console.log("\nDry run complete (no files modified).");
+      console.log(`  Files to modify: ${emitResult.filesModified}`);
+      console.log("\n✨ Dry run complete (no files modified).");
     } else if (emitResult.filesModified > 0) {
-      console.log(`\nUpdated ${emitResult.filesModified} file(s).`);
+      console.log(`  Files modified: ${emitResult.filesModified}`);
+      console.log(`\n✅ Updated ${emitResult.filesModified} file(s).`);
     } else {
-      console.log("\nNo changes were necessary.");
+      console.log(`  Files modified: 0`);
+      console.log("\n✅ All dependencies are already in sync!");
     }
 
     if (

@@ -51,7 +51,10 @@ const CONFIG_TEMPLATE = `{
       // Optional: Template for tsconfig.json
       // "tsconfigTemplate": {
       //   "extends": "../../tsconfig.base.json"
-      // }
+      // },
+
+      // Optional: Set to false for non-TypeScript projects (default: true)
+      // "requiresTsconfig": false
     }
   },
 
@@ -187,6 +190,13 @@ function parseWorkspaceTypes(
         configRecord.tsconfigTemplate,
         `workspaceTypes["${pattern}"].tsconfigTemplate`,
       ) as Partial<TsConfig>;
+    }
+
+    if (configRecord.requiresTsconfig !== undefined) {
+      workspaceConfig.requiresTsconfig = ensureBoolean(
+        configRecord.requiresTsconfig,
+        `workspaceTypes["${pattern}"].requiresTsconfig`,
+      );
     }
 
     result[pattern] = workspaceConfig;

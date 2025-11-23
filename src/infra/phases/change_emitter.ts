@@ -139,20 +139,27 @@ function detectStaleDependencies(
     ...(currentPackageJson.devDependencies || {}),
   };
 
+  // Track which packages are workspace packages (either in inventory or declared with workspace:*)
+  const workspacePackageNames = new Set<string>();
+
   for (const [dep, version] of Object.entries(allDeps)) {
     const isWorkspace = version?.includes("workspace:") ||
       workspaceProjects.has(dep);
-    if (isWorkspace && !resolvedDeps.has(dep)) {
-      stale.packageJsonDeps.push(dep);
+    if (isWorkspace) {
+      workspacePackageNames.add(dep);
+      if (!resolvedDeps.has(dep)) {
+        stale.packageJsonDeps.push(dep);
+      }
     }
   }
 
   if (currentTsconfig?.compilerOptions?.paths) {
     for (const key of Object.keys(currentTsconfig.compilerOptions.paths)) {
       const base = key.replace(/\/\*$/, "");
-      const looksWorkspace = workspaceProjects.has(base) ||
-        base.startsWith("@");
-      if (looksWorkspace && !resolvedDeps.has(base)) {
+      // Check if this path is for a workspace package (from package.json or inventory)
+      const isWorkspacePackage = workspacePackageNames.has(base) ||
+        workspaceProjects.has(base);
+      if (isWorkspacePackage && !resolvedDeps.has(base)) {
         stale.tsconfigPaths.push(key);
       }
     }
@@ -400,7 +407,7 @@ export function createChangeEmitter(): ChangeEmitterPort {
         warnings: [],
       };
 
-      logger.info("Analyzing project files for updates...");
+      logger.info("→ Analyzing changes needed...");
 
       for (const [projectId, project] of Object.entries(graph.projects)) {
         const packageJsonPath = join(project.project.root, "package.json");
@@ -429,6 +436,11 @@ export function createChangeEmitter(): ChangeEmitterPort {
           stale.tsconfigReferences.length > 0
         ) {
           result.staleDependencies[projectId] = stale;
+          logger.debug?.(
+            `Stale dependencies in ${projectId}: ${
+              JSON.stringify(stale, null, 2)
+            }`,
+          );
         }
 
         const {
@@ -489,19 +501,42 @@ export function createChangeEmitter(): ChangeEmitterPort {
         }
       }
 
-      if (Object.keys(result.staleDependencies).length > 0) {
-        logger.warn(
-          `Found stale dependencies in ${
-            Object.keys(result.staleDependencies).length
-          } project(s)`,
-        );
+      const staleCount = Object.keys(result.staleDependencies).length;
+
+      if (staleCount > 0 && verbose) {
+        logger.info("\n⚠️  Stale Dependencies Detected:");
+        for (
+          const [projectId, stale] of Object.entries(result.staleDependencies)
+        ) {
+          logger.info(`\n  📦 ${projectId}:`);
+          if (stale.packageJsonDeps.length > 0) {
+            logger.info(
+              `    package.json: ${stale.packageJsonDeps.join(", ")}`,
+            );
+          }
+          if (stale.tsconfigPaths.length > 0) {
+            logger.info(
+              `    tsconfig paths: ${stale.tsconfigPaths.join(", ")}`,
+            );
+          }
+          if (stale.tsconfigReferences.length > 0) {
+            logger.info(
+              `    tsconfig references: ${stale.tsconfigReferences.join(", ")}`,
+            );
+          }
+        }
+        logger.info("");
       }
 
-      if (result.filesModified === 0) {
-        logger.info("All dependencies already in sync");
+      if (result.filesModified === 0 && staleCount === 0) {
+        logger.info("✅ All dependencies are already in sync!");
+      } else if (result.filesModified === 0 && staleCount > 0) {
+        logger.warn(
+          `⚠️  Found stale dependencies in ${staleCount} project(s), but no new dependencies to add`,
+        );
       } else {
         logger.info(
-          `Planned updates touch ${result.filesModified} file(s) across ${result.projectsUpdated.length} project(s)`,
+          `📝 Planned updates touch ${result.filesModified} file(s) across ${result.projectsUpdated.length} project(s)`,
         );
       }
 

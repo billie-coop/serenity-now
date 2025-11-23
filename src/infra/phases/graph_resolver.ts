@@ -72,23 +72,36 @@ export async function defaultEntryPointResolver(
     }
     // Handle object exports
     if (typeof exports === "object" && !Array.isArray(exports)) {
-      let defaultExport = exports["."] ?? exports.default ?? exports.import;
+      const rootExport = exports["."] ?? exports.default ?? exports.import;
 
-      // Handle nested conditional exports: { ".": { "import": "...", "require": "...", "types": "..." } }
-      if (typeof defaultExport === "object" && !Array.isArray(defaultExport)) {
-        // Prefer import over require for ESM compatibility
-        defaultExport = defaultExport.import ?? defaultExport.require ??
-          defaultExport.types ?? defaultExport.default;
-      }
-
-      if (typeof defaultExport === "string") {
-        const fullPath = join(project.root, defaultExport);
+      if (typeof rootExport === "string") {
+        const fullPath = join(project.root, rootExport);
         const exists = await fs.fileExists(fullPath);
         return {
-          path: defaultExport,
+          path: rootExport,
           exists,
-          isTypeDefinition: defaultExport.endsWith(".d.ts"),
+          isTypeDefinition: rootExport.endsWith(".d.ts"),
         };
+      }
+
+      if (rootExport && typeof rootExport === "object") {
+        // Prefer import over require for ESM compatibility, then fall back to types/default
+        const candidates = [
+          rootExport.import,
+          rootExport.require,
+          rootExport.default,
+          rootExport.types,
+        ].filter((value): value is string => typeof value === "string");
+
+        for (const candidate of candidates) {
+          const fullPath = join(project.root, candidate);
+          const exists = await fs.fileExists(fullPath);
+          return {
+            path: candidate,
+            exists,
+            isTypeDefinition: candidate.endsWith(".d.ts"),
+          };
+        }
       }
     }
   }
@@ -134,6 +147,31 @@ function collectSourceFiles(
   return record.usageDetails
     .filter((detail) => detail.dependencyId === dependencyId)
     .map((detail) => detail.sourceFile);
+}
+
+/**
+ * Extracts the package name from an import specifier.
+ * Handles both scoped and unscoped packages, stripping subpaths.
+ *
+ * Examples:
+ * - "@scope/package" → "@scope/package"
+ * - "@scope/package/src/file" → "@scope/package"
+ * - "package" → "package"
+ * - "package/subpath" → "package"
+ */
+function extractPackageName(specifier: string): string {
+  if (specifier.startsWith("@")) {
+    // Scoped package: @scope/package or @scope/package/subpath
+    const parts = specifier.split("/");
+    if (parts.length >= 2) {
+      return `${parts[0]}/${parts[1]}`;
+    }
+    return specifier;
+  } else {
+    // Unscoped package: package or package/subpath
+    const parts = specifier.split("/");
+    return parts[0] ?? specifier;
+  }
 }
 
 function detectCycles(projects: Record<string, ResolvedProject>): Cycle[] {
@@ -287,6 +325,33 @@ function detectDiamondDependencies(
   return patterns;
 }
 
+/**
+ * Resolves an import specifier to a workspace package ID.
+ * Returns the package ID if it's a workspace package, null if external.
+ *
+ * This uses the explicit inventory - no guessing or inference.
+ */
+function resolveWorkspaceDependencyId(
+  specifier: string,
+  inventory: ProjectInventory,
+): string | null {
+  // First check if it's an exact match (common case)
+  if (inventory.projects[specifier]) {
+    return specifier;
+  }
+
+  // Extract package name from deep imports (e.g., @scope/pkg/src/file → @scope/pkg)
+  const packageName = extractPackageName(specifier);
+
+  // Check if the extracted package name is in the workspace
+  if (inventory.projects[packageName]) {
+    return packageName;
+  }
+
+  // Not a workspace package - it's external
+  return null;
+}
+
 export function createGraphResolver(
   deps: GraphResolverDeps = {},
 ): GraphResolverPort {
@@ -323,8 +388,26 @@ export function createGraphResolver(
             continue;
           }
 
-          const dependencyProject = inventory.projects[depId];
+          // Resolve to workspace package ID (handles deep imports, filters external packages)
+          const workspacePackageId = resolveWorkspaceDependencyId(
+            depId,
+            inventory,
+          );
+
+          // Skip if not a workspace package (external dependency)
+          if (!workspacePackageId) {
+            continue;
+          }
+
+          // Skip if it's a self-reference via deep import
+          if (workspacePackageId === projectId) {
+            continue;
+          }
+
+          const dependencyProject = inventory.projects[workspacePackageId];
           if (!dependencyProject) {
+            // This shouldn't happen since resolveWorkspaceDependencyId checks inventory
+            // But keep as safety check
             warnings.push(
               `Project ${projectId} imports ${depId}, but it was not found in the workspace`,
             );
@@ -340,12 +423,22 @@ export function createGraphResolver(
           }
 
           const sourceFiles = collectSourceFiles(usageRecord, depId);
-          dependencies[depId] = {
-            dependency: dependencyProject,
-            entryPoint,
-            reason: "import",
-            sourceFiles,
-          };
+
+          // Use workspace package ID as key (consolidates deep imports)
+          const existing = dependencies[workspacePackageId];
+          if (existing) {
+            // Merge source files if this package was already added (e.g., via different deep imports)
+            existing.sourceFiles = Array.from(
+              new Set([...existing.sourceFiles, ...sourceFiles]),
+            );
+          } else {
+            dependencies[workspacePackageId] = {
+              dependency: dependencyProject,
+              entryPoint,
+              reason: "import",
+              sourceFiles,
+            };
+          }
         }
 
         resolved.projects[projectId] = {
@@ -363,18 +456,34 @@ export function createGraphResolver(
       );
       resolved.warnings = warnings;
 
+      if (resolved.cycles.length > 0) {
+        logger.warn(
+          `⚠️  Found ${resolved.cycles.length} circular dependency cycle(s)!`,
+        );
+      } else {
+        logger.info("→ No circular dependencies found");
+      }
+
       if (resolved.diamonds.length > 0) {
         logger.info(
-          `Detected ${resolved.diamonds.length} diamond dependency pattern(s)`,
+          `→ Detected ${resolved.diamonds.length} diamond dependency pattern(s)`,
         );
       }
+
+      const totalDeps = Object.values(resolved.projects).reduce(
+        (sum, project) => sum + Object.keys(project.dependencies).length,
+        0,
+      );
+      logger.info(
+        `✅ Resolved ${
+          Object.keys(resolved.projects).length
+        } projects with ${totalDeps} total dependencies`,
+      );
 
       if (warnings.length > 0) {
         logger.warn(
           `Dependency resolution produced ${warnings.length} warning(s)`,
         );
-      } else {
-        logger.info("Dependency graph resolved without warnings");
       }
 
       return resolved;

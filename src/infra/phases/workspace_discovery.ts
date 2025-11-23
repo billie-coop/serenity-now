@@ -162,23 +162,32 @@ export function createWorkspaceDiscovery(
 
           const tsconfigPath = join(projectRoot, "tsconfig.json");
           const hasTsconfig = await fs.fileExists(tsconfigPath);
-          if (!hasTsconfig) {
-            warnings.push(
-              `Project ${packageName} at ${relativeRoot} is missing tsconfig.json`,
-            );
-          }
 
           const workspaceConfig = matchWorkspaceConfig(
             relativeRoot,
             config.workspaceTypes,
           );
+
           if (!workspaceConfig) {
             warnings.push(
               `Project ${packageName} at ${relativeRoot} does not match any configured workspace type patterns`,
             );
+            // Still check for tsconfig even if no workspace config
+            if (!hasTsconfig) {
+              warnings.push(
+                `Project ${packageName} at ${relativeRoot} is missing tsconfig.json`,
+              );
+            }
             continue;
           }
           workspaceConfigs[relativeRoot] = workspaceConfig;
+
+          const requiresTsconfig = workspaceConfig.requiresTsconfig ?? true;
+          if (!hasTsconfig && requiresTsconfig) {
+            warnings.push(
+              `Project ${packageName} at ${relativeRoot} is missing tsconfig.json`,
+            );
+          }
 
           warnings.push(
             ...validateNamePrefix(packageName, relativeRoot, workspaceConfig),
@@ -210,7 +219,7 @@ export function createWorkspaceDiscovery(
       }
 
       logger.info(
-        `Discovered ${Object.keys(projects).length} workspace projects`,
+        `→ Found ${Object.keys(projects).length} projects`,
       );
       return { projects, warnings, workspaceConfigs };
     },

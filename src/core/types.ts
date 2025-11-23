@@ -32,6 +32,7 @@ export interface WorkspaceTypeConfig {
   enforceNamePrefix?: string | false;
   packageJsonTemplate?: Partial<PackageJson>;
   tsconfigTemplate?: Partial<TsConfig>;
+  requiresTsconfig?: boolean; // Default: true
 }
 
 export interface SyncConfig {

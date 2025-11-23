@@ -104,11 +104,11 @@ Deno.test("graph resolver links dependencies between projects", async () => {
   assertEquals(sharedDep.sourceFiles, ["src/main.ts"]);
 });
 
-Deno.test("graph resolver warns about missing dependencies", async () => {
+Deno.test("graph resolver skips external dependencies silently", async () => {
   const usage: ProjectUsage = {
     usage: {
       "app": {
-        dependencies: ["missing"],
+        dependencies: ["react", "lodash", "@types/node"],
         typeOnlyDependencies: [],
         usageDetails: [],
       },
@@ -124,9 +124,14 @@ Deno.test("graph resolver warns about missing dependencies", async () => {
     createLogger(),
     createMockFs(),
   );
-  assert(
-    graph.warnings.some((w) => w.includes("missing")),
-    "Expected warning for missing dependency",
+
+  // External dependencies should be skipped silently (no warnings)
+  assertEquals(graph.warnings.length, 0);
+
+  // The resolved project should have no dependencies (external packages filtered out)
+  assertEquals(
+    Object.keys(graph.projects["app"]?.dependencies ?? {}).length,
+    0,
   );
 });
 
@@ -182,4 +187,192 @@ Deno.test("graph resolver detects cycles", async () => {
   );
 
   assert(graph.cycles.length > 0, "Expected cycle to be detected");
+});
+
+Deno.test("graph resolver filters external scoped packages", async () => {
+  const usage: ProjectUsage = {
+    usage: {
+      "app": {
+        dependencies: ["@react/core", "@types/node", "@testing-library/react"],
+        typeOnlyDependencies: [],
+        usageDetails: [],
+      },
+    },
+    warnings: [],
+  };
+  const resolver = createGraphResolver();
+  const graph = await resolver.resolve(
+    baseInventory,
+    usage,
+    baseConfig,
+    baseOptions,
+    createLogger(),
+    createMockFs(),
+  );
+
+  // External scoped packages should be filtered
+  assertEquals(graph.warnings.length, 0);
+  assertEquals(
+    Object.keys(graph.projects["app"]?.dependencies ?? {}).length,
+    0,
+  );
+});
+
+Deno.test("graph resolver filters external unscoped packages", async () => {
+  const usage: ProjectUsage = {
+    usage: {
+      "app": {
+        dependencies: ["react", "lodash", "vite"],
+        typeOnlyDependencies: [],
+        usageDetails: [],
+      },
+    },
+    warnings: [],
+  };
+  const resolver = createGraphResolver();
+  const graph = await resolver.resolve(
+    baseInventory,
+    usage,
+    baseConfig,
+    baseOptions,
+    createLogger(),
+    createMockFs(),
+  );
+
+  // External unscoped packages should be filtered
+  assertEquals(graph.warnings.length, 0);
+  assertEquals(
+    Object.keys(graph.projects["app"]?.dependencies ?? {}).length,
+    0,
+  );
+});
+
+Deno.test("graph resolver handles deep imports to workspace packages", async () => {
+  const inventory: ProjectInventory = {
+    projects: {
+      "app": {
+        id: "app",
+        root: "/repo/app",
+        relativeRoot: "app",
+        packageJson: { name: "app" },
+        workspaceType: "app",
+        workspaceSubType: "website",
+        isPrivate: true,
+      },
+      "@repo/utils": {
+        id: "@repo/utils",
+        root: "/repo/packages/utils",
+        relativeRoot: "packages/utils",
+        packageJson: { name: "@repo/utils" },
+        workspaceType: "shared-package",
+        workspaceSubType: "library",
+        isPrivate: false,
+      },
+    },
+    warnings: [],
+    workspaceConfigs: {},
+  };
+
+  const usage: ProjectUsage = {
+    usage: {
+      "app": {
+        // Deep imports to workspace package
+        dependencies: ["@repo/utils/src/helpers", "@repo/utils/src/validators"],
+        typeOnlyDependencies: [],
+        usageDetails: [
+          {
+            sourceFile: "src/main.ts",
+            dependencyId: "@repo/utils/src/helpers",
+            specifier: "@repo/utils/src/helpers",
+            isTypeOnly: false,
+          },
+          {
+            sourceFile: "src/main.ts",
+            dependencyId: "@repo/utils/src/validators",
+            specifier: "@repo/utils/src/validators",
+            isTypeOnly: false,
+          },
+        ],
+      },
+    },
+    warnings: [],
+  };
+
+  const resolver = createGraphResolver();
+  const graph = await resolver.resolve(
+    inventory,
+    usage,
+    baseConfig,
+    baseOptions,
+    createLogger(),
+    createMockFs(),
+  );
+
+  // Deep imports should be consolidated to the package root
+  const deps = graph.projects["app"]?.dependencies;
+  assertEquals(Object.keys(deps ?? {}).length, 1);
+  assert(
+    deps?.["@repo/utils"] !== undefined,
+    "Expected @repo/utils dependency",
+  );
+
+  // Source files from both deep imports should be merged (but they're from the same file)
+  // Since both imports are from "src/main.ts", we should only have 1 unique source file
+  const utilsDep = deps?.["@repo/utils"];
+  assertEquals(utilsDep?.sourceFiles.length, 1);
+  assertEquals(utilsDep?.sourceFiles[0], "src/main.ts");
+});
+
+Deno.test("graph resolver handles self-imports via deep paths", async () => {
+  const inventory: ProjectInventory = {
+    projects: {
+      "@repo/utils": {
+        id: "@repo/utils",
+        root: "/repo/packages/utils",
+        relativeRoot: "packages/utils",
+        packageJson: { name: "@repo/utils" },
+        workspaceType: "shared-package",
+        workspaceSubType: "library",
+        isPrivate: false,
+      },
+    },
+    warnings: [],
+    workspaceConfigs: {},
+  };
+
+  const usage: ProjectUsage = {
+    usage: {
+      "@repo/utils": {
+        // Package importing from itself via deep path
+        dependencies: ["@repo/utils/src/internal"],
+        typeOnlyDependencies: [],
+        usageDetails: [
+          {
+            sourceFile: "src/index.ts",
+            dependencyId: "@repo/utils/src/internal",
+            specifier: "@repo/utils/src/internal",
+            isTypeOnly: false,
+          },
+        ],
+      },
+    },
+    warnings: [],
+  };
+
+  const resolver = createGraphResolver();
+  const graph = await resolver.resolve(
+    inventory,
+    usage,
+    baseConfig,
+    baseOptions,
+    createLogger(),
+    createMockFs(),
+  );
+
+  // Self-imports should be filtered out (no self-dependency)
+  const deps = graph.projects["@repo/utils"]?.dependencies;
+  assertEquals(Object.keys(deps ?? {}).length, 0);
+
+  // No cycles should be detected
+  assertEquals(graph.cycles.length, 0);
 });
