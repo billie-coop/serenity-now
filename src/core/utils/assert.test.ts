@@ -28,3 +28,40 @@ Deno.test("assert narrows truthy values and throws otherwise", () => {
     throw new Error("Expected custom error to be thrown");
   }
 });
+
+Deno.test("assert throws on null with default message", () => {
+  let threw = false;
+  try {
+    assert(null);
+  } catch (error) {
+    threw = error instanceof Error && error.message === "Assertion failed";
+  }
+  if (!threw) {
+    throw new Error("Expected assert to throw default message on null");
+  }
+});
+
+Deno.test("assert throws on undefined with default message", () => {
+  let threw = false;
+  try {
+    assert(undefined);
+  } catch (error) {
+    threw = error instanceof Error && error.message === "Assertion failed";
+  }
+  if (!threw) {
+    throw new Error("Expected assert to throw default message on undefined");
+  }
+});
+
+Deno.test("assert throws Error object directly", () => {
+  const customError = new Error("direct error");
+  let caughtError: Error | null = null;
+  try {
+    assert(false, customError);
+  } catch (error) {
+    caughtError = error as Error;
+  }
+  if (caughtError !== customError) {
+    throw new Error("Expected exact Error object to be thrown");
+  }
+});

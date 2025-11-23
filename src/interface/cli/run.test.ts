@@ -383,3 +383,91 @@ Deno.test("runCli displays analytics in verbose mode", async () => {
     consoleCapture.restore();
   }
 });
+
+Deno.test("runCli displays help message with --help flag", async () => {
+  const { deps } = createFakeDeps();
+  const consoleCapture = captureConsole();
+  try {
+    const exitCode = await runCli(["--help"], () => deps);
+    assertEquals(exitCode, 0);
+    assert(
+      consoleCapture.logs.some((line) => line.includes("serenity-now")),
+      "expected help message",
+    );
+    assert(
+      consoleCapture.logs.some((line) => line.includes("--dry-run")),
+      "expected --dry-run option in help",
+    );
+    assert(
+      consoleCapture.logs.some((line) => line.includes("--verbose")),
+      "expected --verbose option in help",
+    );
+  } finally {
+    consoleCapture.restore();
+  }
+});
+
+Deno.test("runCli displays health report with --health flag", async () => {
+  const inventory: ProjectInventory = {
+    projects: {
+      "@repo/app": {
+        id: "@repo/app",
+        root: "/repo/apps/app",
+        relativeRoot: "apps/app",
+        packageJson: { name: "@repo/app" },
+        workspaceType: "app",
+        workspaceSubType: "website",
+        isPrivate: true,
+      },
+    },
+    warnings: [
+      "Project @repo/app at apps/app is missing tsconfig.json",
+    ],
+    workspaceConfigs: {},
+  };
+
+  const graphWithDiamonds: ResolvedGraph = {
+    projects: {},
+    cycles: [],
+    diamonds: [
+      {
+        projectId: "@repo/app",
+        directDependency: "@repo/lib",
+        transitiveThrough: ["@repo/ui"],
+        pattern: "incomplete-abstraction",
+        suggestion: "Consider refactoring",
+      },
+    ],
+    warnings: [],
+  };
+
+  const config: SyncConfig = {
+    workspaceTypes: {},
+    defaultDependencies: [],
+  };
+
+  const { deps } = createFakeDeps({
+    config,
+    inventory,
+    graph: graphWithDiamonds,
+  });
+  const consoleCapture = captureConsole();
+  try {
+    const exitCode = await runCli(["--health"], () => deps);
+    assertEquals(exitCode, 0);
+    assert(
+      consoleCapture.logs.some((line) => line.includes("Health Check")),
+      "expected health check header",
+    );
+    assert(
+      consoleCapture.logs.some((line) => line.includes("Diamond Dependencies")),
+      "expected diamond dependencies section",
+    );
+    assert(
+      consoleCapture.logs.some((line) => line.includes("Missing tsconfig")),
+      "expected missing tsconfig section",
+    );
+  } finally {
+    consoleCapture.restore();
+  }
+});
