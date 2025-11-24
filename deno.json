@@ -1,6 +1,6 @@
 {
   "name": "serenity-now",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "exports": "./mod.ts",
   "nodeModulesDir": "auto",
   "tasks": {
@@ -33,13 +33,26 @@
     "noUncheckedIndexedAccess": true
   },
   "fmt": {
-    "exclude": ["example/", "npm/"]
+    "exclude": [
+      "example/",
+      "npm/"
+    ]
   },
   "lint": {
-    "exclude": ["example/", "npm/"]
+    "exclude": [
+      "example/",
+      "npm/"
+    ]
   },
   "test": {
-    "exclude": ["example/", "npm/"]
+    "exclude": [
+      "example/",
+      "npm/"
+    ]
   },
-  "exclude": ["example/", "npm/", "cli_node.ts"]
+  "exclude": [
+    "example/",
+    "npm/",
+    "cli_node.ts"
+  ]
 }
