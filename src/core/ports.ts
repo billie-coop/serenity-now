@@ -13,6 +13,7 @@ export interface LoggerPort {
 	warn(message: string): void;
 	error(message: string): void;
 	debug(message: string): void;
+	success(message: string): void;
 	getWarnings?(): string[];
 }
 

@@ -90,4 +90,12 @@ describe("console logger", () => {
 			false,
 		);
 	});
+
+	it("logs success messages", () => {
+		const logger = createConsoleLogger();
+		logger.success("Test success");
+		expect(capture.logs.some((line) => line.includes("Test success"))).toBe(
+			true,
+		);
+	});
 });

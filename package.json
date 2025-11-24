@@ -13,7 +13,7 @@
 		"test": "vitest --coverage",
 		"format": "biome format --write .",
 		"lint": "biome lint .",
-		"check": "biome check . && tsc --noEmit",
+		"check": "biome check --write . && tsc --noEmit",
 		"typecheck": "tsc --noEmit"
 	},
 	"keywords": [
