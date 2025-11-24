@@ -73,6 +73,7 @@ export async function createTempRepo(
 	});
 	await writeJsonFile(appTsconfig, {
 		compilerOptions: {
+			composite: true,
 			baseUrl: ".",
 			paths: includeStale
 				? { "@repo/unused": ["../unused/src/index.ts"] }
@@ -98,7 +99,9 @@ console.log(greeting);`,
 		version: "0.0.0",
 	});
 	await writeJsonFile(join(libDir, "tsconfig.json"), {
-		compilerOptions: {},
+		compilerOptions: {
+			composite: true,
+		},
 	});
 	await writeTextFile(
 		join(libDir, "src/index.ts"),
