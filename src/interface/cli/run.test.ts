@@ -5,6 +5,7 @@ import type {
 	PhasePorts,
 	RepoManagerDeps,
 } from "../../core/ports.js";
+import { createMockLogger } from "../../core/test-helpers.js";
 import type {
 	EmitResult,
 	ProjectInventory,
@@ -33,16 +34,12 @@ function createFakeDeps(overrides: FakePhaseOutputs = {}): {
 } {
 	const warnings: string[] = [];
 
-	const logger = {
-		phase: () => {},
-		info: () => {},
+	const logger = createMockLogger({
 		warn: (message: string) => {
 			warnings.push(message);
 		},
-		error: () => {},
-		debug: () => {},
 		getWarnings: () => [...warnings],
-	};
+	});
 
 	const fileSystem = {
 		readJson: <T>() => Promise.resolve({} as T),

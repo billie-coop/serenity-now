@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { FileSystemPort, LoggerPort } from "../../core/ports.js";
+import type { FileSystemPort } from "../../core/ports.js";
+import { createMockLogger } from "../../core/test-helpers.js";
 import type {
 	PackageJson,
 	ProjectInventory,
@@ -49,20 +50,6 @@ class InMemoryFileSystem implements FileSystemPort {
 		this.#files.set(path, contents);
 		return Promise.resolve();
 	}
-}
-
-class MemoryLogger implements LoggerPort {
-	infos: string[] = [];
-	warns: string[] = [];
-	phase(): void {}
-	info(message: string): void {
-		this.infos.push(message);
-	}
-	warn(message: string): void {
-		this.warns.push(message);
-	}
-	error(): void {}
-	debug(_message?: string): void {}
 }
 
 function createGraph(): ResolvedGraph {
@@ -147,7 +134,7 @@ describe("change emitter", () => {
 				references: [],
 			}),
 		});
-		const logger = new MemoryLogger();
+		const logger = createMockLogger();
 		const emitter = createChangeEmitter();
 		const graph = createGraph();
 
@@ -188,7 +175,7 @@ describe("change emitter", () => {
 				references: [],
 			}),
 		});
-		const logger = new MemoryLogger();
+		const logger = createMockLogger();
 		const emitter = createChangeEmitter();
 		const graph = createGraph();
 
@@ -255,7 +242,7 @@ describe("change emitter", () => {
 				compilerOptions: {},
 			}),
 		});
-		const logger = new MemoryLogger();
+		const logger = createMockLogger();
 		const emitter = createChangeEmitter();
 
 		await emitter.emit(
@@ -318,7 +305,7 @@ describe("change emitter", () => {
 				compilerOptions: {},
 			}),
 		});
-		const logger = new MemoryLogger();
+		const logger = createMockLogger();
 		const emitter = createChangeEmitter();
 
 		await emitter.emit(
@@ -391,7 +378,7 @@ describe("change emitter", () => {
 				compilerOptions: {},
 			}),
 		});
-		const logger = new MemoryLogger();
+		const logger = createMockLogger();
 		const emitter = createChangeEmitter();
 
 		await emitter.emit(
@@ -475,7 +462,7 @@ describe("change emitter", () => {
 				compilerOptions: {},
 			}),
 		});
-		const logger = new MemoryLogger();
+		const logger = createMockLogger();
 		const emitter = createChangeEmitter();
 
 		await emitter.emit(
@@ -527,7 +514,7 @@ describe("change emitter", () => {
 		const files = new InMemoryFileSystem({
 			"/repo/apps/app/package.json": JSON.stringify({ name: "@repo/app" }),
 		});
-		const logger = new MemoryLogger();
+		const logger = createMockLogger();
 		const emitter = createChangeEmitter();
 
 		const result = await emitter.emit(
@@ -546,7 +533,7 @@ describe("change emitter", () => {
 		const files = new InMemoryFileSystem({
 			"/repo/packages/lib/package.json": JSON.stringify({ name: "@repo/lib" }),
 		});
-		const logger = new MemoryLogger();
+		const logger = createMockLogger();
 		const emitter = createChangeEmitter();
 		const graph = createGraph();
 
@@ -581,7 +568,7 @@ describe("change emitter", () => {
 				compilerOptions: {},
 			}),
 		});
-		const logger = new MemoryLogger();
+		const logger = createMockLogger();
 		const emitter = createChangeEmitter();
 		const graph = createGraph();
 
@@ -619,14 +606,12 @@ describe("change emitter", () => {
 			}),
 		});
 
-		class VerboseLogger extends MemoryLogger {
-			debugs: string[] = [];
-			override debug(message: string): void {
-				this.debugs.push(message);
-			}
-		}
-
-		const logger = new VerboseLogger();
+		const debugs: string[] = [];
+		const logger = createMockLogger({
+			debug(message: string): void {
+				debugs.push(message);
+			},
+		});
 		const emitter = createChangeEmitter();
 		const graph = createGraph();
 
@@ -639,12 +624,8 @@ describe("change emitter", () => {
 			files,
 		);
 
-		expect(logger.debugs.some((d) => d.includes("Updated package.json"))).toBe(
-			true,
-		);
-		expect(logger.debugs.some((d) => d.includes("Updated tsconfig.json"))).toBe(
-			true,
-		);
+		expect(debugs.some((d) => d.includes("Updated package.json"))).toBe(true);
+		expect(debugs.some((d) => d.includes("Updated tsconfig.json"))).toBe(true);
 	});
 
 	it("logs verbose stale dependencies info", async () => {
@@ -669,7 +650,10 @@ describe("change emitter", () => {
 			}),
 		});
 
-		const logger = new MemoryLogger();
+		const infos: string[] = [];
+		const logger = createMockLogger({
+			info: (msg: string) => infos.push(msg),
+		});
 		const emitter = createChangeEmitter();
 		const graph = createGraph();
 
@@ -683,17 +667,13 @@ describe("change emitter", () => {
 		);
 
 		expect(
-			logger.infos.some((msg) => msg.includes("Stale Dependencies Detected")),
+			infos.some((msg) => msg.includes("Stale Dependencies Detected")),
 		).toBe(true);
-		expect(logger.infos.some((msg) => msg.includes("package.json:"))).toBe(
+		expect(infos.some((msg) => msg.includes("package.json:"))).toBe(true);
+		expect(infos.some((msg) => msg.includes("tsconfig paths:"))).toBe(true);
+		expect(infos.some((msg) => msg.includes("tsconfig references:"))).toBe(
 			true,
 		);
-		expect(logger.infos.some((msg) => msg.includes("tsconfig paths:"))).toBe(
-			true,
-		);
-		expect(
-			logger.infos.some((msg) => msg.includes("tsconfig references:")),
-		).toBe(true);
 	});
 
 	it("logs message when no changes needed", async () => {
@@ -724,7 +704,10 @@ describe("change emitter", () => {
 			}),
 		});
 
-		const logger = new MemoryLogger();
+		const infos: string[] = [];
+		const logger = createMockLogger({
+			info: (msg: string) => infos.push(msg),
+		});
 		const emitter = createChangeEmitter();
 
 		await emitter.emit(
@@ -737,9 +720,7 @@ describe("change emitter", () => {
 		);
 
 		expect(
-			logger.infos.some((msg) =>
-				msg.includes("All dependencies are already in sync"),
-			),
+			infos.some((msg) => msg.includes("All dependencies are already in sync")),
 		).toBe(true);
 	});
 
@@ -762,7 +743,7 @@ describe("change emitter", () => {
 			}),
 		});
 
-		const logger = new MemoryLogger();
+		const logger = createMockLogger();
 		const emitter = createChangeEmitter();
 		const graph = createGraph();
 
@@ -804,7 +785,7 @@ describe("change emitter", () => {
 			}),
 		});
 
-		const logger = new MemoryLogger();
+		const logger = createMockLogger();
 		const emitter = createChangeEmitter();
 
 		await emitter.emit(
@@ -844,7 +825,7 @@ describe("change emitter", () => {
 			}),
 		});
 
-		const logger = new MemoryLogger();
+		const logger = createMockLogger();
 		const emitter = createChangeEmitter();
 
 		await emitter.emit(
@@ -876,7 +857,7 @@ describe("change emitter", () => {
 			}),
 		});
 
-		const logger = new MemoryLogger();
+		const logger = createMockLogger();
 		const emitter = createChangeEmitter();
 		const graph = createGraph();
 

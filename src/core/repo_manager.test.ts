@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PhasePorts, RepoManagerDeps } from "./ports.js";
 import { RepoManager } from "./repo_manager.js";
+import { createMockLogger } from "./test-helpers.js";
 import type {
 	EmitResult,
 	ProjectInventory,
@@ -11,14 +12,9 @@ import type {
 } from "./types.js";
 
 function makeTestDeps(log: string[]): RepoManagerDeps {
-	const logger = {
+	const logger = createMockLogger({
 		phase: (msg: string) => log.push(`phase:${msg}`),
-		info: () => {},
-		warn: () => {},
-		error: () => {},
-		debug: () => {},
-		getWarnings: () => [],
-	};
+	});
 
 	const fileSystem = {
 		readJson: <T>(_: string): Promise<T> => Promise.resolve({} as T),

@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { FileSystemPort, LoggerPort } from "../../core/ports.js";
+import type { FileSystemPort } from "../../core/ports.js";
+import { createCapturingLogger } from "../../core/test-helpers.js";
 import type {
 	PackageJson,
 	RepoManagerOptions,
@@ -36,21 +37,6 @@ class InMemoryFileSystem implements FileSystemPort {
 	writeText(): Promise<void> {
 		return Promise.resolve();
 	}
-}
-
-function createLogger(): LoggerPort & { infos: string[]; warnings: string[] } {
-	const infos: string[] = [];
-	const warnings: string[] = [];
-	return {
-		infos,
-		warnings,
-		phase: () => {},
-		info: (msg) => infos.push(msg),
-		warn: (msg) => warnings.push(msg),
-		error: () => {},
-		debug: () => {},
-		getWarnings: () => [...warnings],
-	};
 }
 
 function setupRepo(files: Record<string, unknown>): InMemoryFileSystem {
@@ -108,7 +94,7 @@ describe("workspace discovery", () => {
 			} satisfies PackageJson,
 			"/repo/packages/lib/tsconfig.json": "{}",
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = createStubGlob({
 			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
 			[workspaceGlobPattern("packages/*")]: ["/repo/packages/lib/package.json"],
@@ -145,7 +131,7 @@ describe("workspace discovery", () => {
 				name: "@repo/no-config",
 			} satisfies PackageJson,
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = createStubGlob({
 			[workspaceGlobPattern("apps/*")]: [
 				"/repo/apps/app1/package.json",
@@ -180,7 +166,7 @@ describe("workspace discovery", () => {
 
 	it("throws when root package.json missing", async () => {
 		const fs = new InMemoryFileSystem();
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const discovery = createWorkspaceDiscovery(createStubGlob({}));
 		await expect(() =>
 			discovery.discover(baseConfig, baseOptions, logger, fs),
@@ -199,7 +185,7 @@ describe("workspace discovery", () => {
 			} satisfies PackageJson,
 			"/repo/apps/web/tsconfig.json": "{}",
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = createStubGlob({
 			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
 			[workspaceGlobPattern("packages/*")]: [],
@@ -224,7 +210,7 @@ describe("workspace discovery", () => {
 				workspaces: null,
 			} satisfies { name: string; workspaces: null },
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const discovery = createWorkspaceDiscovery(createStubGlob({}));
 
 		const inventory = await discovery.discover(
@@ -246,7 +232,7 @@ describe("workspace discovery", () => {
 				name: "root",
 			} satisfies PackageJson,
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const discovery = createWorkspaceDiscovery(createStubGlob({}));
 
 		const inventory = await discovery.discover(
@@ -276,7 +262,7 @@ describe("workspace discovery", () => {
 			} satisfies PackageJson,
 			"/repo/apps/ignored/tsconfig.json": "{}",
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = createStubGlob({
 			[workspaceGlobPattern("apps/*")]: [
 				"/repo/apps/app1/package.json",
@@ -311,7 +297,7 @@ describe("workspace discovery", () => {
 				version: "1.0.0",
 			} satisfies { version: string },
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = createStubGlob({
 			[workspaceGlobPattern("apps/*")]: ["/repo/apps/no-name/package.json"],
 		});
@@ -343,7 +329,7 @@ describe("workspace discovery", () => {
 			} satisfies PackageJson,
 			"/repo/apps/web/tsconfig.json": "{}",
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = async function* (_pattern: string) {
 			yield {
 				path: "/repo/apps/web/package.json",
@@ -384,7 +370,7 @@ describe("workspace discovery", () => {
 			} satisfies PackageJson,
 			"/repo/apps/web/tsconfig.json": "{}",
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = async function* (_pattern: string) {
 			yield {
 				path: "/repo/apps/web/package.json",
@@ -420,7 +406,7 @@ describe("workspace discovery", () => {
 			} satisfies PackageJson,
 			"/repo/specific-app/web/tsconfig.json": "{}",
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = createStubGlob({
 			[join(baseOptions.rootDir, "specific-app/*", "package.json")]: [
 				"/repo/specific-app/web/package.json",
@@ -455,7 +441,7 @@ describe("workspace discovery", () => {
 			} satisfies PackageJson,
 			"/repo/apps/web/tsconfig.json": "{}",
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = createStubGlob({
 			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
 		});
@@ -487,7 +473,7 @@ describe("workspace discovery", () => {
 			} satisfies PackageJson,
 			"/repo/apps/web/tsconfig.json": "{}",
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = createStubGlob({
 			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
 		});
@@ -531,7 +517,7 @@ describe("workspace discovery", () => {
 			"/repo/apps/good/tsconfig.json": "{}",
 		});
 
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = createStubGlob({
 			[workspaceGlobPattern("apps/*")]: [
 				"/repo/apps/good/package.json",
@@ -560,7 +546,7 @@ describe("workspace discovery", () => {
 				name: "@repo/web",
 			} satisfies PackageJson,
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = createStubGlob({
 			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
 		});
@@ -591,7 +577,7 @@ describe("workspace discovery", () => {
 				workspaces: ["apps/*"],
 			} satisfies PackageJson,
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const discovery = createWorkspaceDiscovery();
 
 		const inventory = await discovery.discover(
@@ -618,7 +604,7 @@ describe("workspace discovery", () => {
 			} satisfies PackageJson,
 			"/repo/apps/web/tsconfig.json": "{}",
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = createStubGlob({
 			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
 		});
@@ -644,7 +630,7 @@ describe("workspace discovery", () => {
 				name: "@repo/web",
 			} satisfies PackageJson,
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = createStubGlob({
 			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
 		});
@@ -674,7 +660,7 @@ describe("workspace discovery", () => {
 			} satisfies PackageJson,
 			"/repo/apps/web/tsconfig.json": "{}",
 		});
-		const logger = createLogger();
+		const logger = createCapturingLogger();
 		const globber = createStubGlob({
 			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
 		});

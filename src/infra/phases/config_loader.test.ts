@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { FileSystemPort, LoggerPort } from "../../core/ports.js";
+import type { FileSystemPort } from "../../core/ports.js";
+import { createCapturingLogger } from "../../core/test-helpers.js";
 import type { WorkspaceTypeConfig } from "../../core/types.js";
 import { createConfigLoader } from "./config_loader.js";
 
@@ -39,21 +40,6 @@ class InMemoryFileSystem implements FileSystemPort {
 	}
 }
 
-function createTestLogger(): LoggerPort & { infos: string[]; warns: string[] } {
-	const infos: string[] = [];
-	const warns: string[] = [];
-	return {
-		infos,
-		warns,
-		phase: () => {},
-		info: (msg) => infos.push(msg),
-		warn: (msg) => warns.push(msg),
-		error: () => {},
-		debug: () => {},
-		getWarnings: () => [...warns],
-	};
-}
-
 describe("config loader", () => {
 	it("parses existing config", async () => {
 		const fs = new InMemoryFileSystem({
@@ -65,7 +51,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
@@ -83,7 +69,7 @@ describe("config loader", () => {
 
 	it("creates template when missing", async () => {
 		const fs = new InMemoryFileSystem();
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		await expect(() =>
@@ -106,7 +92,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		await expect(() =>
@@ -132,7 +118,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
@@ -158,7 +144,7 @@ describe("config loader", () => {
       "enforceNamePrefix": "@repo/"
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
@@ -177,7 +163,7 @@ describe("config loader", () => {
       "ignoreImports": ["Test \\"quoted\\" value"]
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
@@ -197,7 +183,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
@@ -215,7 +201,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
@@ -225,7 +211,7 @@ describe("config loader", () => {
 
 	it("returns undefined when custom config path does not exist", async () => {
 		const fs = new InMemoryFileSystem();
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		await expect(() =>
@@ -243,7 +229,7 @@ describe("config loader", () => {
       "enforceNamePrefix": "@repo/"
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
@@ -264,7 +250,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
@@ -280,7 +266,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		const config = await loader.load(
@@ -300,7 +286,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		const config = await loader.load(
@@ -326,7 +312,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
@@ -353,7 +339,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
@@ -377,7 +363,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
@@ -396,7 +382,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		await expect(() =>
@@ -415,7 +401,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
@@ -434,7 +420,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		await expect(() =>
@@ -453,7 +439,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		await expect(() =>
@@ -472,7 +458,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		await expect(() =>
@@ -489,7 +475,7 @@ describe("config loader", () => {
       "ignoreImports": "not an array"
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		await expect(() =>
@@ -506,7 +492,7 @@ describe("config loader", () => {
       "ignoreImports": ["valid", 123, "also-valid"]
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		await expect(() =>
@@ -525,7 +511,7 @@ describe("config loader", () => {
       }
     }`,
 		});
-		const logger = createTestLogger();
+		const logger = createCapturingLogger();
 		const loader = createConfigLoader();
 
 		await expect(() =>

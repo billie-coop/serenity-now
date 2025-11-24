@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { FileSystemPort, LoggerPort } from "../../core/ports.js";
+import type { FileSystemPort } from "../../core/ports.js";
+import { createMockLogger } from "../../core/test-helpers.js";
 import type {
 	ProjectInventory,
 	RepoManagerOptions,
@@ -35,16 +36,6 @@ class InMemoryFileSystem implements FileSystemPort {
 	writeText(): Promise<void> {
 		return Promise.resolve();
 	}
-}
-
-function createLogger(): LoggerPort {
-	return {
-		phase: () => {},
-		info: () => {},
-		warn: () => {},
-		error: () => {},
-		debug: () => {},
-	};
 }
 
 const baseInventory: ProjectInventory = {
@@ -95,7 +86,7 @@ describe("import scanner", () => {
 			baseInventory,
 			baseConfig,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 
@@ -130,7 +121,7 @@ describe("import scanner", () => {
 			baseInventory,
 			config,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 
@@ -154,7 +145,7 @@ describe("import scanner", () => {
 			baseInventory,
 			baseConfig,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 
@@ -180,7 +171,7 @@ describe("import scanner", () => {
 			baseInventory,
 			baseConfig,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 
@@ -202,7 +193,7 @@ describe("import scanner", () => {
 			baseInventory,
 			baseConfig,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 
@@ -226,7 +217,7 @@ describe("import scanner", () => {
 			baseInventory,
 			baseConfig,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 
@@ -249,7 +240,7 @@ describe("import scanner", () => {
 			baseInventory,
 			baseConfig,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 
@@ -272,7 +263,7 @@ describe("import scanner", () => {
 			baseInventory,
 			baseConfig,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 
@@ -295,7 +286,7 @@ describe("import scanner", () => {
 			baseInventory,
 			baseConfig,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 
@@ -319,7 +310,7 @@ describe("import scanner", () => {
 			baseInventory,
 			baseConfig,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 
@@ -344,7 +335,7 @@ describe("import scanner", () => {
 			baseInventory,
 			baseConfig,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 
@@ -377,7 +368,7 @@ describe("import scanner", () => {
 			baseInventory,
 			baseConfig,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 
@@ -399,7 +390,7 @@ describe("import scanner", () => {
 			baseInventory,
 			baseConfig,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 
@@ -422,7 +413,7 @@ describe("import scanner", () => {
 			baseInventory,
 			baseConfig,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 
@@ -442,7 +433,7 @@ describe("import scanner", () => {
 			baseInventory,
 			baseConfig,
 			{} as RepoManagerOptions,
-			createLogger(),
+			createMockLogger(),
 			fs,
 		);
 

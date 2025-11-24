@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { FileSystemPort, LoggerPort } from "../../core/ports.js";
+import type { FileSystemPort } from "../../core/ports.js";
+import { createMockLogger } from "../../core/test-helpers.js";
 import type {
 	ProjectInventory,
 	ProjectUsage,
@@ -7,16 +8,6 @@ import type {
 	SyncConfig,
 } from "../../core/types.js";
 import { createGraphResolver } from "./graph_resolver.js";
-
-function createLogger(): LoggerPort {
-	return {
-		phase: () => {},
-		info: () => {},
-		warn: () => {},
-		error: () => {},
-		debug: () => {},
-	};
-}
 
 function createMockFs(): FileSystemPort {
 	return {
@@ -83,7 +74,7 @@ describe("graph resolver", () => {
 			baseUsage,
 			baseConfig,
 			baseOptions,
-			createLogger(),
+			createMockLogger(),
 			createMockFs(),
 		);
 
@@ -111,7 +102,7 @@ describe("graph resolver", () => {
 			usage,
 			baseConfig,
 			baseOptions,
-			createLogger(),
+			createMockLogger(),
 			createMockFs(),
 		);
 
@@ -166,7 +157,7 @@ describe("graph resolver", () => {
 			usage,
 			baseConfig,
 			baseOptions,
-			createLogger(),
+			createMockLogger(),
 			createMockFs(),
 		);
 
@@ -194,7 +185,7 @@ describe("graph resolver", () => {
 			usage,
 			baseConfig,
 			baseOptions,
-			createLogger(),
+			createMockLogger(),
 			createMockFs(),
 		);
 
@@ -219,7 +210,7 @@ describe("graph resolver", () => {
 			usage,
 			baseConfig,
 			baseOptions,
-			createLogger(),
+			createMockLogger(),
 			createMockFs(),
 		);
 
@@ -286,7 +277,7 @@ describe("graph resolver", () => {
 			usage,
 			baseConfig,
 			baseOptions,
-			createLogger(),
+			createMockLogger(),
 			createMockFs(),
 		);
 
@@ -340,7 +331,7 @@ describe("graph resolver", () => {
 			usage,
 			baseConfig,
 			baseOptions,
-			createLogger(),
+			createMockLogger(),
 			createMockFs(),
 		);
 
@@ -402,13 +393,9 @@ describe("graph resolver", () => {
 		};
 
 		const warnings: string[] = [];
-		const logger: LoggerPort = {
-			phase: () => {},
-			info: () => {},
+		const logger = createMockLogger({
 			warn: (msg) => warnings.push(msg),
-			error: () => {},
-			debug: () => {},
-		};
+		});
 
 		const resolver = createGraphResolver();
 		const graph = await resolver.resolve(
@@ -502,7 +489,7 @@ describe("graph resolver", () => {
 			usage,
 			baseConfig,
 			baseOptions,
-			createLogger(),
+			createMockLogger(),
 			createMockFs(),
 		);
 
@@ -587,7 +574,7 @@ describe("graph resolver", () => {
 			usage,
 			config,
 			baseOptions,
-			createLogger(),
+			createMockLogger(),
 			createMockFs(),
 		);
 
@@ -655,7 +642,7 @@ describe("graph resolver", () => {
 			usage,
 			config,
 			baseOptions,
-			createLogger(),
+			createMockLogger(),
 			createMockFs(),
 		);
 
@@ -715,13 +702,9 @@ describe("graph resolver", () => {
 		};
 
 		const warnings: string[] = [];
-		const logger: LoggerPort = {
-			phase: () => {},
-			info: () => {},
+		const logger = createMockLogger({
 			warn: (msg) => warnings.push(msg),
-			error: () => {},
-			debug: () => {},
-		};
+		});
 
 		const resolver = createGraphResolver();
 		await resolver.resolve(
@@ -795,7 +778,7 @@ describe("graph resolver", () => {
 			usage,
 			baseConfig,
 			baseOptions,
-			createLogger(),
+			createMockLogger(),
 			createMockFs(),
 		);
 
@@ -842,7 +825,7 @@ describe("graph resolver", () => {
 			usage,
 			baseConfig,
 			baseOptions,
-			createLogger(),
+			createMockLogger(),
 			createMockFs(),
 		);
 
