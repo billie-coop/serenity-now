@@ -1,10 +1,10 @@
-import { join, relative } from "@std/path";
-import { expandGlob } from "@std/fs/expand-glob";
+import { join, relative } from "node:path";
+import fg from "fast-glob";
 import type {
   FileSystemPort,
   LoggerPort,
   WorkspaceDiscoveryPort,
-} from "../../core/ports.ts";
+} from "../../core/ports.js";
 import type {
   PackageJson,
   ProjectInfo,
@@ -12,8 +12,8 @@ import type {
   RepoManagerOptions,
   SyncConfig,
   WorkspaceTypeConfig,
-} from "../../core/types.ts";
-import { assert } from "../../core/utils/assert.ts";
+} from "../../core/types.js";
+import { assert } from "../../core/utils/assert.js";
 
 interface GlobEntry {
   path: string;
@@ -24,11 +24,20 @@ interface GlobEntry {
 type Globber = (pattern: string) => AsyncIterable<GlobEntry>;
 
 async function* defaultGlobber(pattern: string): AsyncIterable<GlobEntry> {
-  for await (const entry of expandGlob(pattern)) {
+  const entries = await fg(pattern, {
+    onlyFiles: false,
+    markDirectories: true,
+    absolute: true,
+  });
+
+  for (const path of entries) {
+    const isFile = !path.endsWith("/");
+    const name = path.split("/").pop() || "";
+
     yield {
-      path: entry.path,
-      name: entry.name,
-      isFile: entry.isFile,
+      path: path.replace(/\/$/, ""), // Remove trailing slash
+      name,
+      isFile,
     };
   }
 }

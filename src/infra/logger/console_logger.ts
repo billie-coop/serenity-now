@@ -1,5 +1,5 @@
-import { bold, cyan, green, red, yellow } from "@std/fmt/colors";
-import type { LoggerPort } from "../../core/ports.ts";
+import { bold, cyan, green, red, yellow } from "../utils/colors.js";
+import type { LoggerPort } from "../../core/ports.js";
 
 class ConsoleLogger implements LoggerPort {
   private warnings: string[] = [];

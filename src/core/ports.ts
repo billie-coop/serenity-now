@@ -5,7 +5,7 @@ import type {
   RepoManagerOptions,
   ResolvedGraph,
   SyncConfig,
-} from "./types.ts";
+} from "./types.js";
 
 export interface LoggerPort {
   phase(message: string): void;

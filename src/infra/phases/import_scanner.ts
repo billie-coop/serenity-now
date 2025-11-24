@@ -1,18 +1,18 @@
-import { relative } from "@std/path";
-import { walk } from "@std/fs/walk";
-import { globToRegExp } from "@std/path/glob-to-regexp";
+import { relative } from "node:path";
+import fg from "fast-glob";
+import { globToRegExp } from "../utils/glob.js";
 import type {
   FileSystemPort,
   ImportScannerPort,
   LoggerPort,
-} from "../../core/ports.ts";
+} from "../../core/ports.js";
 import type {
   ProjectInventory,
   ProjectUsage,
   ProjectUsageRecord,
   RepoManagerOptions,
   SyncConfig,
-} from "../../core/types.ts";
+} from "../../core/types.js";
 
 type FileEntry = { path: string; isFile: boolean };
 type FileWalker = (root: string) => AsyncIterable<FileEntry>;
@@ -36,14 +36,15 @@ const DEFAULT_EXTENSIONS = [
 
 function createDefaultWalker(): FileWalker {
   return async function* (root: string) {
-    for await (
-      const entry of walk(root, {
-        includeDirs: false,
-        includeFiles: true,
-        followSymlinks: false,
-      })
-    ) {
-      yield { path: entry.path, isFile: entry.isFile };
+    const entries = await fg("**/*", {
+      cwd: root,
+      onlyFiles: true,
+      followSymbolicLinks: false,
+      absolute: true,
+    });
+
+    for (const path of entries) {
+      yield { path, isFile: true };
     }
   };
 }

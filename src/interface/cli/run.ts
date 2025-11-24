@@ -1,13 +1,13 @@
-import { parseArgs } from "@std/cli/parse-args";
-import { RepoManager } from "../../core/repo_manager.ts";
-import type { RepoManagerDeps } from "../../core/ports.ts";
+import { parseArgs } from "../../infra/utils/parseArgs.js";
+import { RepoManager } from "../../core/repo_manager.js";
+import type { RepoManagerDeps } from "../../core/ports.js";
 import type {
   ProjectInventory,
   ProjectUsage,
   RepoManagerOptions,
   ResolvedGraph,
-} from "../../core/types.ts";
-import { createDefaultDeps } from "../../infra/default_deps.ts";
+} from "../../core/types.js";
+import { createDefaultDeps } from "../../infra/default_deps.js";
 
 interface CliArgs {
   help?: boolean;
@@ -285,7 +285,7 @@ function printHealthReport(
 }
 
 export async function runCli(
-  rawArgs: string[] = Deno.args,
+  rawArgs: string[],
   depsFactory: DepsFactory = defaultDepsFactory,
 ): Promise<number> {
   const args = parseCliArgs(rawArgs);
@@ -296,7 +296,7 @@ export async function runCli(
   }
 
   const repoOptions: RepoManagerOptions = {
-    rootDir: Deno.cwd(),
+    rootDir: process.cwd(),
     configPath: args.config,
     dryRun: args.dryRun,
     verbose: args.verbose,

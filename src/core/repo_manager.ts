@@ -5,8 +5,8 @@ import type {
   RepoManagerOptions,
   ResolvedGraph,
   SyncConfig,
-} from "./types.ts";
-import type { RepoManagerDeps } from "./ports.ts";
+} from "./types.js";
+import type { RepoManagerDeps } from "./ports.js";
 
 /**
  * RepoManager orchestrates the main sync phases while depending only on ports.

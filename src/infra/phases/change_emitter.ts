@@ -1,9 +1,9 @@
-import { dirname, join, relative } from "@std/path";
+import { dirname, join, relative } from "node:path";
 import type {
   ChangeEmitterPort,
   FileSystemPort,
   LoggerPort,
-} from "../../core/ports.ts";
+} from "../../core/ports.js";
 import type {
   EmitResult,
   PackageJson,
@@ -15,7 +15,7 @@ import type {
   StaleDependencies,
   SyncConfig,
   TsConfig,
-} from "../../core/types.ts";
+} from "../../core/types.js";
 
 interface JsonLike {
   [key: string]: unknown;

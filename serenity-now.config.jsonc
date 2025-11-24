@@ -1,0 +1,67 @@
+{
+  // Serenity Now! Configuration
+  // This file configures how dependencies are synchronized across your monorepo
+
+  // Define workspace types and their configurations
+  "workspaceTypes": {
+    // Example: Match all projects in apps/ directory
+    "apps/*": {
+      "type": "app",  // "app" or "shared-package"
+      // Optional: Categorize further (mobile, db, website, etc.)
+      // "subType": "website",
+
+      // Optional: Enforce package name prefix
+      // "enforceNamePrefix": "@mycompany/",
+
+      // Optional: Template for package.json fields
+      // "packageJsonTemplate": {
+      //   "private": true
+      // },
+
+      // Optional: Template for tsconfig.json
+      // "tsconfigTemplate": {
+      //   "extends": "../../tsconfig.base.json"
+      // },
+
+      // Optional: Set to false for non-TypeScript projects (default: true)
+      // "requiresTsconfig": false
+    }
+  },
+
+  // Optional: Dependencies to always include in every project
+  "defaultDependencies": [],
+
+  // Optional: Projects to ignore during scanning
+  "ignoreProjects": [],
+
+  // Optional: Import patterns to ignore
+  "ignoreImports": [
+    // Example: "react", "node:*"
+  ],
+
+  // Optional: File patterns to exclude from scanning (glob syntax)
+  // Uncomment and customize as needed:
+  // "excludePatterns": [
+  //   "**/node_modules/**",
+  //   "**/dist/**",
+  //   "**/build/**",
+  //   "**/out/**",
+  //   "**/coverage/**",
+  //   "**/.turbo/**",
+  //   "**/.next/**",
+  //   "**/__tests__/**",
+  //   "**/*.test.ts",
+  //   "**/*.test.tsx",
+  //   "**/*.spec.ts",
+  //   "**/*.spec.tsx"
+  // ],
+
+  // Optional: Universal utility packages (won't be flagged as diamond dependencies)
+  // "universalUtilities": [],
+
+  // Optional: TypeScript configuration defaults
+  "tsconfig": {
+    // Enable incremental compilation with project references (recommended)
+    // "incremental": true  // Default: true
+  }
+}

@@ -1,18 +1,17 @@
-import { isAbsolute, join } from "@std/path";
-import { parse as parseJsonc } from "@std/jsonc";
+import { isAbsolute, join } from "node:path";
 import type {
   ConfigLoaderPort,
   FileSystemPort,
   LoggerPort,
-} from "../../core/ports.ts";
+} from "../../core/ports.js";
 import type {
   PackageJson,
   RepoManagerOptions,
   SyncConfig,
   TsConfig,
   WorkspaceTypeConfig,
-} from "../../core/types.ts";
-import { assert } from "../../core/utils/assert.ts";
+} from "../../core/types.js";
+import { assert } from "../../core/utils/assert.js";
 
 const DEFAULT_CONFIG_FILES = [
   "serenity-now.config.jsonc",
@@ -98,6 +97,70 @@ const CONFIG_TEMPLATE = `{
 `;
 
 class ConfigError extends Error {}
+
+// Simple JSONC parser - strips comments and trailing commas
+function parseJsonc(text: string): unknown {
+  let result = "";
+  let inString = false;
+  let inSingleLineComment = false;
+  let inMultiLineComment = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    // Handle string boundaries
+    if (char === '"' && (i === 0 || text[i - 1] !== "\\")) {
+      inString = !inString;
+      result += char;
+      continue;
+    }
+
+    // If in string, just add the character
+    if (inString) {
+      result += char;
+      continue;
+    }
+
+    // Handle multi-line comment end
+    if (inMultiLineComment) {
+      if (char === "*" && next === "/") {
+        inMultiLineComment = false;
+        i++; // Skip the '/'
+      }
+      continue;
+    }
+
+    // Handle single-line comment end
+    if (inSingleLineComment) {
+      if (char === "\n") {
+        inSingleLineComment = false;
+        result += char;
+      }
+      continue;
+    }
+
+    // Check for comment starts
+    if (char === "/" && next === "/") {
+      inSingleLineComment = true;
+      i++; // Skip the second '/'
+      continue;
+    }
+
+    if (char === "/" && next === "*") {
+      inMultiLineComment = true;
+      i++; // Skip the '*'
+      continue;
+    }
+
+    result += char;
+  }
+
+  // Remove trailing commas
+  result = result.replace(/,(\s*[}\]])/g, "$1");
+
+  return JSON.parse(result);
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

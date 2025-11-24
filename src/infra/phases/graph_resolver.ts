@@ -2,7 +2,7 @@ import type {
   FileSystemPort,
   GraphResolverPort,
   LoggerPort,
-} from "../../core/ports.ts";
+} from "../../core/ports.js";
 import type {
   Cycle,
   DiamondPattern,
@@ -15,7 +15,7 @@ import type {
   ResolvedGraph,
   ResolvedProject,
   SyncConfig,
-} from "../../core/types.ts";
+} from "../../core/types.js";
 
 interface GraphResolverDeps {
   resolveEntryPoint?: (
@@ -29,7 +29,7 @@ export async function defaultEntryPointResolver(
   fs: FileSystemPort,
 ): Promise<EntryPointInfo> {
   const pkg = project.packageJson;
-  const { join } = await import("@std/path");
+  const { join } = await import("node:path");
 
   // Strategy 1: TypeScript source (preferred for tsconfig path mappings)
   const tsPatterns = ["src/index.ts", "src/index.tsx"];
