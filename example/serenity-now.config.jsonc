@@ -1,46 +1,46 @@
 {
-  // Example Serenity Now configuration
-  "workspaceTypes": {
-    "apps/*": {
-      "type": "app",
-      "packageJsonTemplate": {
-        "private": true
-      },
-      "tsconfigTemplate": {
-        "extends": "../../tsconfig.base.json",
-        "compilerOptions": {
-          "outDir": "../../dist/{{projectDir}}"
-        }
-      }
-    },
-    "packages/*": {
-      "type": "shared-package",
-      "enforceNamePrefix": "@example/",
-      "packageJsonTemplate": {
-        "main": "src/index.ts",
-        "types": "src/index.ts"
-      },
-      "tsconfigTemplate": {
-        "extends": "../../tsconfig.base.json",
-        "include": ["src/**/*"],
-        "compilerOptions": {
-          "outDir": "dist"
-        }
-      }
-    }
-  },
+	// Example Serenity Now configuration
+	"workspaceTypes": {
+		"apps/*": {
+			"type": "app",
+			"packageJsonTemplate": {
+				"private": true
+			},
+			"tsconfigTemplate": {
+				"extends": "../../tsconfig.base.json",
+				"compilerOptions": {
+					"outDir": "../../dist/{{projectDir}}"
+				}
+			}
+		},
+		"packages/*": {
+			"type": "shared-package",
+			"enforceNamePrefix": "@example/",
+			"packageJsonTemplate": {
+				"main": "src/index.ts",
+				"types": "src/index.ts"
+			},
+			"tsconfigTemplate": {
+				"extends": "../../tsconfig.base.json",
+				"include": ["src/**/*"],
+				"compilerOptions": {
+					"outDir": "dist"
+				}
+			}
+		}
+	},
 
-  // Dependencies that should be in every project
-  "defaultDependencies": [],
+	// Dependencies that should be in every project
+	"defaultDependencies": [],
 
-  // Projects to ignore
-  "ignoreProjects": [],
+	// Projects to ignore
+	"ignoreProjects": [],
 
-  // Import patterns to ignore
-  "ignoreImports": ["node:*", "react", "react-dom"],
+	// Import patterns to ignore
+	"ignoreImports": ["node:*", "react", "react-dom"],
 
-  // TypeScript configuration
-  "tsconfig": {
-    "incremental": true  // Enable incremental compilation (default: true)
-  }
+	// TypeScript configuration
+	"tsconfig": {
+		"incremental": true // Enable incremental compilation (default: true)
+	}
 }

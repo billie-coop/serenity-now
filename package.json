@@ -1,0 +1,62 @@
+{
+	"name": "serenity-now",
+	"version": "0.1.0",
+	"description": "A monorepo dependency management tool that keeps workspace dependencies in sync",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"bin": {
+		"serenity-now": "./dist/cli.js"
+	},
+	"files": [
+		"dist"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "tsup",
+		"dev": "tsx src/cli.ts",
+		"test": "vitest --coverage",
+		"format": "biome format --write .",
+		"lint": "biome lint .",
+		"check": "biome check --write . && tsc --noEmit",
+		"typecheck": "tsc --noEmit",
+		"prepublishOnly": "npm run check && npm test && npm run build"
+	},
+	"keywords": [
+		"monorepo",
+		"workspace",
+		"dependencies",
+		"typescript",
+		"tsconfig",
+		"package-json"
+	],
+	"author": "",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/billie-coop/serenity-now.git"
+	},
+	"bugs": {
+		"url": "https://github.com/billie-coop/serenity-now/issues"
+	},
+	"engines": {
+		"node": ">=18.0.0"
+	},
+	"dependencies": {
+		"fast-glob": "^3.3.2"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.3.7",
+		"@types/node": "^24.10.1",
+		"@vitest/coverage-v8": "^4.0.13",
+		"tsup": "^8.5.1",
+		"tsx": "^4.19.2",
+		"typescript": "^5.7.2",
+		"vitest": "^4.0.13"
+	}
+}

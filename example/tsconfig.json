@@ -1,25 +1,25 @@
 {
-  "extends": "./tsconfig.base.json",
-  "compilerOptions": {
-    "composite": true,
-    "incremental": true
-  },
-  "references": [
-    {
-      "path": "apps/mobile"
-    },
-    {
-      "path": "apps/web"
-    },
-    {
-      "path": "packages/api-client"
-    },
-    {
-      "path": "packages/ui"
-    },
-    {
-      "path": "packages/utils"
-    }
-  ],
-  "files": []
+	"extends": "./tsconfig.base.json",
+	"compilerOptions": {
+		"composite": true,
+		"incremental": true
+	},
+	"references": [
+		{
+			"path": "apps/mobile"
+		},
+		{
+			"path": "apps/web"
+		},
+		{
+			"path": "packages/api-client"
+		},
+		{
+			"path": "packages/ui"
+		},
+		{
+			"path": "packages/utils"
+		}
+	],
+	"files": []
 }

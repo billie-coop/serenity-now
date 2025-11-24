@@ -1,10 +1,10 @@
 {
-  "name": "@example/web",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "@example/api-client": "workspace:*",
-    "@example/ui": "workspace:*",
-    "@example/utils": "workspace:*"
-  }
+	"name": "@example/web",
+	"version": "1.0.0",
+	"private": true,
+	"dependencies": {
+		"@example/api-client": "workspace:*",
+		"@example/ui": "workspace:*",
+		"@example/utils": "workspace:*"
+	}
 }

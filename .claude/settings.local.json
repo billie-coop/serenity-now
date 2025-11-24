@@ -1,15 +1,15 @@
 {
-  "permissions": {
-    "allow": [
-      "Read(//Users/steve/Dev/github.com/billie-coop/billie-coop-monorepo/repo-manager/**)",
-      "WebSearch",
-      "Bash(yarn build)",
-      "Bash(deno task:*)",
-      "Read(//Users/steve/Dev/github.com/billie-coop/billie-coop-monorepo/**)",
-      "Bash(mkdir:*)",
-      "Bash(yarn check:*)"
-    ],
-    "deny": [],
-    "ask": []
-  }
+	"permissions": {
+		"allow": [
+			"Read(//Users/steve/Dev/github.com/billie-coop/billie-coop-monorepo/repo-manager/**)",
+			"WebSearch",
+			"Bash(yarn build)",
+			"Bash(deno task:*)",
+			"Read(//Users/steve/Dev/github.com/billie-coop/billie-coop-monorepo/**)",
+			"Bash(mkdir:*)",
+			"Bash(yarn check:*)"
+		],
+		"deny": [],
+		"ask": []
+	}
 }

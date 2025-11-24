@@ -1,23 +1,17 @@
 {
-  "extends": "../../tsconfig.base.json",
-  "include": [
-    "src/**/*"
-  ],
-  "compilerOptions": {
-    "outDir": "dist",
-    "paths": {
-      "@example/utils": [
-        "../utils/src/index.ts"
-      ],
-      "@example/utils/*": [
-        "../utils/src/*"
-      ]
-    },
-    "composite": true
-  },
-  "references": [
-    {
-      "path": "../utils"
-    }
-  ]
+	"extends": "../../tsconfig.base.json",
+	"include": ["src/**/*"],
+	"compilerOptions": {
+		"outDir": "dist",
+		"paths": {
+			"@example/utils": ["../utils/src/index.ts"],
+			"@example/utils/*": ["../utils/src/*"]
+		},
+		"composite": true
+	},
+	"references": [
+		{
+			"path": "../utils"
+		}
+	]
 }
