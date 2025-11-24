@@ -108,10 +108,7 @@ export interface DiamondPattern {
   projectId: string;
   directDependency: string;
   transitiveThrough: string[];
-  pattern:
-    | "universal-utility"
-    | "incomplete-abstraction"
-    | "potential-layering-violation";
+  pattern: "universal-utility" | "incomplete-abstraction";
   suggestion: string;
 }
 
