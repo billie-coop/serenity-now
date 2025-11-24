@@ -45,7 +45,7 @@ Want to pull some shared logic into `@myorg/utils`? Just move the code, import i
 
 Get a clear view of how your packages depend on each other. Spot circular dependencies. Understand your dependency graph.
 
-### ✅ Enable Incremental Compilation (as a bonus)
+### ✅ Enable Incremental Compilation
 
 Once your project references are correct, TypeScript's incremental builds actually work. Rebuilding only what changed becomes faster as your monorepo grows.
 
@@ -76,7 +76,7 @@ Modern monorepo tooling is modular. Different tools solve different problems:
 | **Lerna**                    | Version bumping, publishing                       | ✅ Yes - Independent concerns                    |
 | **Syncpack**                 | Enforces consistent 3rd-party dependency versions | ⚠️ Similar goal, different scope\*               |
 
-**Syncpack vs Serenity Now:**
+**\*Syncpack vs Serenity Now:**
 
 - **Syncpack** ensures your external dependencies (React, Lodash, etc.) use consistent versions across packages
 - **Serenity Now** ensures your internal workspace dependencies match your actual imports and TypeScript references
@@ -88,118 +88,141 @@ You might use both! Syncpack for `react: ^18.0.0` consistency, Serenity Now for 
 ## 📦 Installation
 
 ```bash
-npm install -g serenity-now
-# or
-yarn global add serenity-now
-# or
-pnpm add -g serenity-now
+npm install --save-dev serenity-now
 ```
 
 ---
 
-## 🚀 Usage
+## 🚀 Quick Start
 
-### Basic Commands
+1. **Create config** (`serenity-now.config.jsonc`):
 
-```bash
-# Check what's out of sync (doesn't change anything)
-serenity-now --dry-run
-
-# Fix everything automatically
-serenity-now
-
-# See detailed output
-serenity-now --verbose
-
-# Check repo health
-serenity-now --health
+```jsonc
+{
+  "workspaceTypes": {
+    "app": { "patterns": ["apps/*"] },
+    "shared-package": { "patterns": ["packages/*"] },
+  },
+}
 ```
 
-### What It Actually Does
+2. **Run**: `npx serenity-now`
 
-When you run `serenity-now`, it:
+3. **Add to scripts**:
 
-1. 🔍 **Scans** all TypeScript files for imports
-2. 📊 **Builds** a dependency graph of your workspace
-3. 🔍 **Compares** actual imports vs package.json dependencies
-4. 🔍 **Validates** tsconfig.json references match reality
-5. ✏️ **Updates** package.json and tsconfig.json to match (unless `--dry-run`)
-6. ✅ **Reports** what changed (or what would change)
+```json
+{
+  "scripts": {
+    "sync": "serenity-now",
+    "sync:check": "serenity-now --dry-run --fail-on-stale"
+  }
+}
+```
+
+---
+
+## 📖 Usage
+
+```bash
+serenity-now              # Fix everything automatically
+serenity-now --dry-run    # Preview changes without modifying files
+serenity-now --verbose    # See detailed output
+serenity-now --health     # Show repo health report
+serenity-now --help       # Show all options
+```
+
+### Options
+
+| Flag                    | Description                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `--dry-run`, `-d`       | Preview changes without modifying files                                        |
+| `--verbose`, `-v`       | Enable verbose logging with detailed output                                    |
+| `--config`, `-c <path>` | Path to configuration file (default: serenity-now.config.jsonc)                |
+| `--fail-on-stale`       | Exit with error code if stale dependencies found (useful for CI)               |
+| `--force`, `-f`         | Continue even if circular dependencies detected                                |
+| `--health`              | Show detailed health report (unused packages, circular deps, diamond patterns) |
+| `--help`, `-h`          | Show help message                                                              |
 
 ---
 
 ## ⚙️ Configuration
 
-Create a `serenity-now.json` in your monorepo root:
+Create `serenity-now.config.jsonc` in your monorepo root:
 
-```json
+```jsonc
 {
-  "organization": {
-    "prefix": "@myorg/"
-  },
-  "workspace": {
-    "patterns": ["packages/*", "apps/*"],
-    "types": {
-      "apps/*": {
-        "type": "application"
+  // Define workspace types and their glob patterns
+  "workspaceTypes": {
+    "app": {
+      "patterns": ["apps/*"],
+      "subTypes": {
+        "website": ["apps/web"],
+        "api": ["apps/api"],
       },
-      "packages/*": {
-        "type": "library",
-        "enforcePrefix": true
-      }
-    }
+    },
+    "shared-package": {
+      "patterns": ["packages/*"],
+    },
   },
-  "dependencies": {
-    "default": ["@myorg/shared-utils"],
-    "ignored": ["eslint", "prettier"],
-    "typeOnlyInDev": true
-  }
+
+  // Packages expected to create diamond dependencies (e.g., logging, types)
+  "universalUtilities": ["logger", "types"],
+
+  // Enforce naming conventions (optional)
+  "packageNamePattern": "^@myorg/",
+
+  // Exclude patterns from import scanning (optional)
+  "excludePatterns": ["**/node_modules/**", "**/dist/**", "**/*.test.ts"],
 }
 ```
 
-### Configuration Explained
+---
 
-- **`organization.prefix`** - Your workspace package prefix (e.g., `@myorg/`)
-- **`workspace.patterns`** - Where your packages live (glob patterns)
-- **`workspace.types`** - Categorize packages (apps vs libraries) and enforce rules
-- **`dependencies.default`** - Auto-add these to every package
-- **`dependencies.ignored`** - Never manage these dependencies
-- **`dependencies.typeOnlyInDev`** - Put type-only imports in `devDependencies`
+## 🧠 Design Philosophy
+
+**Keep it simple. Don't be clever. Be strict but reasonable.**
+
+### No Guessing
+
+Don't infer configuration. Don't fall back to "smart" defaults. If something's wrong, say so.
+
+### Explicit Configuration
+
+Users configure workspace types explicitly. No pattern matching magic.
+
+### Fail Fast
+
+If a project is misconfigured, report it immediately. Clear errors > silent workarounds.
+
+See [CLAUDE.md](CLAUDE.md) for full details.
+
+---
+
+## 🔧 CI Integration
+
+```yaml
+# .github/workflows/ci.yml
+- name: Check dependencies are in sync
+  run: npm run sync:check
+```
+
+```json
+{
+  "scripts": {
+    "sync:check": "serenity-now --dry-run --fail-on-stale"
+  }
+}
+```
 
 ---
 
 ## 🏗️ Requirements
 
-- **Node.js** >= 18.0.0
-- **TypeScript monorepo** using workspaces:
-  - ✅ Yarn workspaces
-  - ✅ pnpm workspaces
-  - ✅ npm workspaces
-- **Every workspace project must have**:
+- **Node.js** >= 20.0.0
+- **TypeScript monorepo** using npm/yarn/pnpm workspaces
+- Every workspace project must have:
   - `package.json` with a `name` field
-  - `tsconfig.json` with `composite: true`
-
----
-
-## 🧠 Philosophy
-
-Serenity Now follows these principles (see [CLAUDE.md](CLAUDE.md) for details):
-
-### 1️⃣ No Guessing
-
-Don't infer configuration. Don't fall back to "smart" defaults. If something's wrong, say so.
-
-### 2️⃣ Explicit Configuration
-
-Users configure workspace types explicitly. No pattern matching magic.
-
-### 3️⃣ Fail Fast
-
-If a project is misconfigured, report it immediately. Clear errors > silent workarounds.
-
-### 4️⃣ TypeScript-First
-
-Built for TypeScript monorepos. Other languages can coexist, but TS is the focus.
+  - `tsconfig.json` for TypeScript configuration
 
 ---
 
@@ -210,18 +233,6 @@ Because managing monorepo dependencies manually will make you want to scream **"
 This tool brings that serenity, now.
 
 _"These dependencies are real... and they're SPECTACULAR!"_ ✨
-
----
-
-## 🗺️ Roadmap
-
-- [ ] Publish to npm (in progress)
-- [ ] Add `--watch` mode for development
-- [ ] Detect and warn about circular dependencies
-- [ ] Generate dependency graph visualizations
-- [ ] VS Code extension for inline diagnostics
-- [ ] Plugin system for custom rules
-- [ ] Support for pnpm patches and overrides
 
 ---
 
@@ -236,14 +247,6 @@ Found a bug? Have a feature request? [Open an issue](https://github.com/billie-c
 ## 📄 License
 
 MIT
-
----
-
-## 🙏 Acknowledgments
-
-Built with [Deno](https://deno.com) and compiled to Node.js via [@deno/dnt](https://github.com/denoland/dnt).
-
-Inspired by real-world pain managing a large TypeScript monorepo with 60+ packages.
 
 ---
 
