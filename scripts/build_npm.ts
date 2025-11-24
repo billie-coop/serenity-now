@@ -59,6 +59,11 @@ await build({
     // Copy additional files to npm package
     Deno.copyFileSync("LICENSE", "npm/LICENSE");
     Deno.copyFileSync("README.md", "npm/README.md");
+
+    // Add shebang to CLI entry point
+    const cliPath = "npm/esm/cli_node.js";
+    const cliContent = Deno.readTextFileSync(cliPath);
+    Deno.writeTextFileSync(cliPath, `#!/usr/bin/env node\n${cliContent}`);
   },
   // Don't include test files
   test: false,
