@@ -1,140 +1,64 @@
-import { assertEquals } from "@std/assert";
-import { globToRegExp } from "@std/path/glob-to-regexp";
+import { describe, expect, it } from "vitest";
+import { globToRegExp } from "../../infra/utils/glob.js";
 
 function shouldExclude(path: string, pattern: string): boolean {
-  const normalizedPath = path.replace(/\\/g, "/");
-  const regex = globToRegExp(pattern, { extended: true, globstar: true });
-  return regex.test(normalizedPath);
+	const normalizedPath = path.replace(/\\/g, "/");
+	const regex = globToRegExp(pattern);
+	return regex.test(normalizedPath);
 }
 
-Deno.test("exclude pattern: **/node_modules/** should match node_modules at any level", () => {
-  const pattern = "**/node_modules/**";
+describe("exclude pattern", () => {
+	it("**/node_modules/** should match node_modules at any level", () => {
+		const pattern = "**/node_modules/**";
 
-  // Should match
-  assertEquals(
-    shouldExclude("node_modules/foo/index.js", pattern),
-    true,
-    "Should match at root",
-  );
-  assertEquals(
-    shouldExclude("src/node_modules/bar/main.js", pattern),
-    true,
-    "Should match nested",
-  );
-  assertEquals(
-    shouldExclude("packages/app/node_modules/lib.js", pattern),
-    true,
-    "Should match deeply nested",
-  );
+		expect(shouldExclude("node_modules/foo/index.js", pattern)).toBe(true);
+		expect(shouldExclude("src/node_modules/bar/main.js", pattern)).toBe(true);
+		expect(shouldExclude("packages/app/node_modules/lib.js", pattern)).toBe(
+			true,
+		);
 
-  // Should NOT match - these are currently FAILING (incorrectly matching)
-  assertEquals(
-    shouldExclude("node_modules-helper/src/index.js", pattern),
-    false,
-    "Should NOT match node_modules-helper",
-  );
-  assertEquals(
-    shouldExclude("packages/node_modules_backup/file.js", pattern),
-    false,
-    "Should NOT match node_modules_backup",
-  );
-  assertEquals(
-    shouldExclude("src/my-node_modules/test.js", pattern),
-    false,
-    "Should NOT match my-node_modules",
-  );
-});
+		expect(shouldExclude("node_modules-helper/src/index.js", pattern)).toBe(
+			false,
+		);
+		expect(shouldExclude("packages/node_modules_backup/file.js", pattern)).toBe(
+			false,
+		);
+		expect(shouldExclude("src/my-node_modules/test.js", pattern)).toBe(false);
+	});
 
-Deno.test("exclude pattern: **/dist/** should match dist directory, not substring", () => {
-  const pattern = "**/dist/**";
+	it("**/dist/** should match dist directory, not substring", () => {
+		const pattern = "**/dist/**";
 
-  // Should match
-  assertEquals(
-    shouldExclude("dist/index.js", pattern),
-    true,
-    "Should match dist at root",
-  );
-  assertEquals(
-    shouldExclude("packages/app/dist/bundle.js", pattern),
-    true,
-    "Should match nested dist",
-  );
+		expect(shouldExclude("dist/index.js", pattern)).toBe(true);
+		expect(shouldExclude("packages/app/dist/bundle.js", pattern)).toBe(true);
 
-  // Should NOT match - these are currently FAILING (incorrectly matching)
-  assertEquals(
-    shouldExclude("packages/distribution/src/index.js", pattern),
-    false,
-    "Should NOT match distribution",
-  );
-  assertEquals(
-    shouldExclude("src/distant/file.js", pattern),
-    false,
-    "Should NOT match distant",
-  );
-  assertEquals(
-    shouldExclude("redis_toolkit/main.js", pattern),
-    false,
-    "Should NOT match redis_toolkit",
-  );
-});
+		expect(shouldExclude("packages/distribution/src/index.js", pattern)).toBe(
+			false,
+		);
+		expect(shouldExclude("src/distant/file.js", pattern)).toBe(false);
+		expect(shouldExclude("redis_toolkit/main.js", pattern)).toBe(false);
+	});
 
-Deno.test("exclude pattern: **/*.test.ts should match test files at any level", () => {
-  const pattern = "**/*.test.ts";
+	it("**/*.test.ts should match test files at any level", () => {
+		const pattern = "**/*.test.ts";
 
-  // Should match
-  assertEquals(
-    shouldExclude("foo.test.ts", pattern),
-    true,
-    "Should match at root",
-  );
-  assertEquals(
-    shouldExclude("src/utils/helper.test.ts", pattern),
-    true,
-    "Should match nested",
-  );
-  assertEquals(
-    shouldExclude("packages/app/__tests__/button.test.ts", pattern),
-    true,
-    "Should match deeply nested",
-  );
+		expect(shouldExclude("foo.test.ts", pattern)).toBe(true);
+		expect(shouldExclude("src/utils/helper.test.ts", pattern)).toBe(true);
+		expect(
+			shouldExclude("packages/app/__tests__/button.test.ts", pattern),
+		).toBe(true);
 
-  // Should NOT match
-  assertEquals(
-    shouldExclude("src/test.ts", pattern),
-    false,
-    "Should NOT match test.ts without .test",
-  );
-  assertEquals(
-    shouldExclude("foo.test.tsx", pattern),
-    false,
-    "Should NOT match .tsx",
-  );
-});
+		expect(shouldExclude("src/test.ts", pattern)).toBe(false);
+		expect(shouldExclude("foo.test.tsx", pattern)).toBe(false);
+	});
 
-Deno.test("exclude pattern: **/__tests__/** should match __tests__ directory only", () => {
-  const pattern = "**/__tests__/**";
+	it("**/__tests__/** should match __tests__ directory only", () => {
+		const pattern = "**/__tests__/**";
 
-  // Should match
-  assertEquals(
-    shouldExclude("__tests__/foo.ts", pattern),
-    true,
-    "Should match at root",
-  );
-  assertEquals(
-    shouldExclude("src/__tests__/bar.test.ts", pattern),
-    true,
-    "Should match nested",
-  );
+		expect(shouldExclude("__tests__/foo.ts", pattern)).toBe(true);
+		expect(shouldExclude("src/__tests__/bar.test.ts", pattern)).toBe(true);
 
-  // Should NOT match - these might be FAILING
-  assertEquals(
-    shouldExclude("src/__tests_helpers__/util.ts", pattern),
-    false,
-    "Should NOT match __tests_helpers__",
-  );
-  assertEquals(
-    shouldExclude("my__tests__/file.ts", pattern),
-    false,
-    "Should NOT match my__tests__",
-  );
+		expect(shouldExclude("src/__tests_helpers__/util.ts", pattern)).toBe(false);
+		expect(shouldExclude("my__tests__/file.ts", pattern)).toBe(false);
+	});
 });

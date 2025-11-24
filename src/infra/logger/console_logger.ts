@@ -1,45 +1,43 @@
-import { bold, cyan, green, red, yellow } from "../utils/colors.js";
 import type { LoggerPort } from "../../core/ports.js";
+import { bold, cyan, green, red, yellow } from "../utils/colors.js";
 
 class ConsoleLogger implements LoggerPort {
-  private warnings: string[] = [];
+	private warnings: string[] = [];
 
-  constructor(
-    private readonly verbose = false,
-  ) {}
+	constructor(private readonly verbose = false) {}
 
-  phase(message: string): void {
-    console.log(`\n${cyan(bold(`Phase: ${message}`))}`);
-  }
+	phase(message: string): void {
+		console.log(`\n${cyan(bold(`Phase: ${message}`))}`);
+	}
 
-  info(message: string): void {
-    console.log(message);
-  }
+	info(message: string): void {
+		console.log(message);
+	}
 
-  warn(message: string): void {
-    console.warn(yellow(`⚠ ${message}`));
-    this.warnings.push(message);
-  }
+	warn(message: string): void {
+		console.warn(yellow(`⚠ ${message}`));
+		this.warnings.push(message);
+	}
 
-  error(message: string): void {
-    console.error(red(`✗ ${message}`));
-  }
+	error(message: string): void {
+		console.error(red(`✗ ${message}`));
+	}
 
-  debug(message: string): void {
-    if (this.verbose) {
-      console.log(message);
-    }
-  }
+	debug(message: string): void {
+		if (this.verbose) {
+			console.log(message);
+		}
+	}
 
-  getWarnings(): string[] {
-    return [...this.warnings];
-  }
+	getWarnings(): string[] {
+		return [...this.warnings];
+	}
 
-  success(message: string): void {
-    console.log(green(`✓ ${message}`));
-  }
+	success(message: string): void {
+		console.log(green(`✓ ${message}`));
+	}
 }
 
 export function createConsoleLogger(verbose = false): LoggerPort {
-  return new ConsoleLogger(verbose);
+	return new ConsoleLogger(verbose);
 }

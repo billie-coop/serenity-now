@@ -1,32 +1,22 @@
 {
-  "extends": "../../tsconfig.base.json",
-  "include": [
-    "src/**/*"
-  ],
-  "compilerOptions": {
-    "outDir": "../../dist/mobile",
-    "paths": {
-      "@example/api-client": [
-        "../../packages/api-client/src/index.ts"
-      ],
-      "@example/api-client/*": [
-        "../../packages/api-client/src/*"
-      ],
-      "@example/ui": [
-        "../../packages/ui/src/index.ts"
-      ],
-      "@example/ui/*": [
-        "../../packages/ui/src/*"
-      ]
-    },
-    "composite": true
-  },
-  "references": [
-    {
-      "path": "../../packages/api-client"
-    },
-    {
-      "path": "../../packages/ui"
-    }
-  ]
+	"extends": "../../tsconfig.base.json",
+	"include": ["src/**/*"],
+	"compilerOptions": {
+		"outDir": "../../dist/mobile",
+		"paths": {
+			"@example/api-client": ["../../packages/api-client/src/index.ts"],
+			"@example/api-client/*": ["../../packages/api-client/src/*"],
+			"@example/ui": ["../../packages/ui/src/index.ts"],
+			"@example/ui/*": ["../../packages/ui/src/*"]
+		},
+		"composite": true
+	},
+	"references": [
+		{
+			"path": "../../packages/api-client"
+		},
+		{
+			"path": "../../packages/ui"
+		}
+	]
 }

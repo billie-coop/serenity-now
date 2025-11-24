@@ -1,17 +1,17 @@
 {
-  "name": "@example/monorepo",
-  "version": "1.0.0",
-  "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "scripts": {
-    "check": "tsc --build",
-    "check:watch": "tsc --build --watch",
-    "clean": "tsc --build --clean"
-  },
-  "devDependencies": {
-    "typescript": "^5.0.0"
-  }
+	"name": "@example/monorepo",
+	"version": "1.0.0",
+	"private": true,
+	"workspaces": [
+		"apps/*",
+		"packages/*"
+	],
+	"scripts": {
+		"check": "tsc --build",
+		"check:watch": "tsc --build --watch",
+		"clean": "tsc --build --clean"
+	},
+	"devDependencies": {
+		"typescript": "^5.0.0"
+	}
 }
