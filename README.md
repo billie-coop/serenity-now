@@ -2,6 +2,10 @@
 
 > **SERENITY NOW!** Your TypeScript monorepo's sanity checker.
 
+<p align="center">
+  <img src="./serenity-now.gif" alt="Serenity Now!" width="500">
+</p>
+
 Stop manually managing workspace dependencies. Stop hunting down circular imports. Stop guessing if your `tsconfig.json` references are correct. Serenity Now keeps your TypeScript monorepo's internal dependencies in perfect sync with reality.
 
 ---
