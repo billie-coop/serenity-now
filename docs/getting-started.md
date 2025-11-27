@@ -64,7 +64,57 @@ This will:
 - Update `tsconfig.json` references for TypeScript project references
 - Remove unused dependencies and references
 
-### 4. Add to Package Scripts
+### 4. Set Up TypeScript Configuration (Recommended)
+
+For best results with TypeScript project references, use a two-file setup:
+
+**Root `tsconfig.json`** - Just for project references (managed by Serenity Now):
+
+```jsonc
+{
+  "files": [],
+  "references": [
+    // Serenity Now manages these references
+    { "path": "./apps/web" },
+    { "path": "./packages/utils" },
+  ],
+}
+```
+
+**Root `tsconfig.options.json`** - Your actual compiler options:
+
+```jsonc
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "strict": true,
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    // ... all your other compiler options
+  },
+}
+```
+
+Then in your workspace `tsconfig.json` files:
+
+```jsonc
+{
+  "extends": "../../tsconfig.options.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+  },
+  "include": ["src/**/*"],
+  "references": [
+    // Serenity Now manages these too
+  ],
+}
+```
+
+**Why this pattern?** It separates concerns: `tsconfig.json` handles project structure (managed by Serenity Now), while `tsconfig.options.json` handles your compiler settings (managed by you).
+
+### 5. Add to Package Scripts
 
 Add convenience scripts to your root `package.json`:
 
