@@ -236,6 +236,16 @@ _"These dependencies are real... and they're SPECTACULAR!"_ ✨
 
 ---
 
+## 📚 Documentation
+
+For more detailed information, check out the [full documentation](./docs/README.md):
+
+- [Getting Started Guide](./docs/getting-started.md)
+- [Configuration Reference](./docs/configuration.md)
+- [How It Works](./docs/how-it-works.md)
+
+---
+
 ## 🤝 Contributing
 
 Contributions welcome! This tool was extracted from a real production monorepo at [billie-coop](https://github.com/billie-coop), so it's battle-tested but still evolving.
