@@ -3,9 +3,9 @@ import { nodeFileSystem } from "./fs/node_fs.js";
 import { createConsoleLogger } from "./logger/console_logger.js";
 import { createChangeEmitter } from "./phases/change_emitter.js";
 import { createConfigLoader } from "./phases/config_loader.js";
-import { createExportScanner } from "./phases/export_scanner.js";
 import { createGraphResolver } from "./phases/graph_resolver.js";
-import { createImportScanner } from "./phases/import_scanner.js";
+import { createTypeScriptExportScanner } from "./phases/typescript_export_scanner.js";
+import { createTypeScriptImportScanner } from "./phases/typescript_import_scanner.js";
 import { createUnusedExportDetector } from "./phases/unused_export_detector.js";
 import { createWorkspaceDiscovery } from "./phases/workspace_discovery.js";
 
@@ -22,10 +22,10 @@ export function createDefaultDeps(
     phases: {
       configLoader: createConfigLoader(),
       workspaceDiscovery: createWorkspaceDiscovery(),
-      importScanner: createImportScanner(),
+      importScanner: createTypeScriptImportScanner(),
       graphResolver: createGraphResolver(),
       changeEmitter: createChangeEmitter(),
-      exportScanner: createExportScanner(),
+      exportScanner: createTypeScriptExportScanner(),
       unusedExportDetector: createUnusedExportDetector(),
     },
   };
