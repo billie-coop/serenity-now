@@ -63,6 +63,7 @@ const NAMED_EXPORT_REGEX =
 const EXPORT_LIST_REGEX = /export\s*\{\s*([^}]+)\s*\}/g;
 const EXPORT_DEFAULT_REGEX = /export\s+default\s+/g;
 const EXPORT_NAMESPACE_REGEX = /export\s*\*\s+as\s+(\w+)\s+from/g;
+const EXPORT_STAR_REGEX = /export\s*\*\s+from\s*["'`]([^"'`]+)["'`]/g;
 const EXPORT_TYPE_REGEX = /export\s+type\s+/g;
 
 interface ExportMatch {
@@ -173,9 +174,39 @@ function stripComments(source: string): string {
 }
 
 /**
- * Parses export statements from source code and returns export information.
+ * Resolves a relative import path to an absolute file path
  */
-function parseExports(source: string, _filePath: string): ExportMatch[] {
+function resolveImportPath(fromFile: string, importPath: string): string {
+  const dir = join(fromFile, "..");
+  let resolved = join(dir, importPath);
+
+  // Try different extensions
+  const extensions = [".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx"];
+  for (const ext of extensions) {
+    const withExt = resolved.endsWith(ext) ? resolved : resolved + ext;
+    return withExt; // Return the path (caller will check if it exists)
+  }
+
+  return resolved;
+}
+
+/**
+ * Parses export statements from source code and returns export information.
+ * Recursively follows `export * from './file'` to get all re-exported symbols.
+ */
+async function parseExports(
+  source: string,
+  filePath: string,
+  fs: FileSystemPort,
+  readFile: (path: string, fs: FileSystemPort) => Promise<string>,
+  visited: Set<string> = new Set(),
+): Promise<ExportMatch[]> {
+  // Prevent infinite recursion
+  if (visited.has(filePath)) {
+    return [];
+  }
+  visited.add(filePath);
+
   const cleanedSource = stripComments(source);
   const results: ExportMatch[] = [];
 
@@ -250,6 +281,41 @@ function parseExports(source: string, _filePath: string): ExportMatch[] {
         isTypeOnly: false,
         exportType: "namespace",
       });
+    }
+  }
+
+  // Scan for re-exports: export * from "./file"
+  // Recursively parse the re-exported file
+  EXPORT_STAR_REGEX.lastIndex = 0;
+  const reexports: string[] = [];
+  // biome-ignore lint/suspicious/noAssignInExpressions: standard regex pattern matching idiom
+  while ((match = EXPORT_STAR_REGEX.exec(cleanedSource)) !== null) {
+    const importPath = match[1];
+    if (importPath && importPath.startsWith(".")) {
+      reexports.push(importPath);
+    }
+  }
+
+  // Follow re-exports to get their exports
+  for (const importPath of reexports) {
+    const resolvedPath = resolveImportPath(filePath, importPath);
+
+    try {
+      // Try to read the re-exported file
+      if (await fs.fileExists(resolvedPath)) {
+        const reexportedContent = await readFile(resolvedPath, fs);
+        const reexportedResults = await parseExports(
+          reexportedContent,
+          resolvedPath,
+          fs,
+          readFile,
+          visited,
+        );
+        // Add all exports from the re-exported file
+        results.push(...reexportedResults);
+      }
+    } catch {
+      // File doesn't exist or can't be read, skip it
     }
   }
 
@@ -338,7 +404,12 @@ async function scanProjectExports(
   // Only scan the entry point file
   try {
     const content = await readFile(entryPoint.path, fs);
-    const exportMatches = parseExports(content, entryPoint.path);
+    const exportMatches = await parseExports(
+      content,
+      entryPoint.path,
+      fs,
+      readFile,
+    );
     const relativeFile = relative(project.root, entryPoint.path);
 
     for (const { exportName, isTypeOnly, exportType } of exportMatches) {
