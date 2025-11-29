@@ -399,12 +399,13 @@ export function createExportScanner(
         0,
       );
 
+      const projectsScanned = Object.keys(inventory.projects).length;
       const projectsWithExports = Object.values(projects).filter(
         (proj) => proj.exports.length > 0,
       ).length;
 
       logger.info(
-        `✅ Scanned ${projectsWithExports} package entry points, found ${totalExports} exports`,
+        `✅ Scanned ${projectsScanned} projects: ${projectsWithExports} have exports (${totalExports} total)`,
       );
 
       return {
