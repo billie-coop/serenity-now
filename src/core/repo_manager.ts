@@ -1,125 +1,168 @@
 import type { RepoManagerDeps } from "./ports.js";
 import type {
-	EmitResult,
-	ProjectInventory,
-	ProjectUsage,
-	RepoManagerOptions,
-	ResolvedGraph,
-	SyncConfig,
+  EmitResult,
+  ExportAnalysis,
+  ProjectInventory,
+  ProjectUsage,
+  RepoManagerOptions,
+  ResolvedGraph,
+  SyncConfig,
+  UnusedExportsReport,
 } from "./types.js";
 
 /**
  * RepoManager orchestrates the main sync phases while depending only on ports.
  */
 export class RepoManager {
-	private config?: SyncConfig;
+  private config?: SyncConfig;
 
-	constructor(
-		private readonly options: RepoManagerOptions,
-		private readonly deps: RepoManagerDeps,
-	) {}
+  constructor(
+    private readonly options: RepoManagerOptions,
+    private readonly deps: RepoManagerDeps,
+  ) {}
 
-	private get logger() {
-		return this.deps.logger;
-	}
+  private get logger() {
+    return this.deps.logger;
+  }
 
-	private get fileSystem() {
-		return this.deps.fileSystem;
-	}
+  private get fileSystem() {
+    return this.deps.fileSystem;
+  }
 
-	async loadConfig(): Promise<SyncConfig> {
-		this.logger.phase("Loading Configuration");
-		this.config = await this.deps.phases.configLoader.load(
-			this.options,
-			this.logger,
-			this.fileSystem,
-		);
-		return this.config;
-	}
+  async loadConfig(): Promise<SyncConfig> {
+    this.logger.phase("Loading Configuration");
+    this.config = await this.deps.phases.configLoader.load(
+      this.options,
+      this.logger,
+      this.fileSystem,
+    );
+    return this.config;
+  }
 
-	async discoverWorkspace(): Promise<ProjectInventory> {
-		const config = this.ensureConfigLoaded();
-		this.logger.phase("Discovering Workspace");
-		return await this.deps.phases.workspaceDiscovery.discover(
-			config,
-			this.options,
-			this.logger,
-			this.fileSystem,
-		);
-	}
+  async discoverWorkspace(): Promise<ProjectInventory> {
+    const config = this.ensureConfigLoaded();
+    this.logger.phase("Discovering Workspace");
+    return await this.deps.phases.workspaceDiscovery.discover(
+      config,
+      this.options,
+      this.logger,
+      this.fileSystem,
+    );
+  }
 
-	async scanImports(inventory: ProjectInventory): Promise<ProjectUsage> {
-		const config = this.ensureConfigLoaded();
-		this.logger.phase("Scanning Imports");
-		return await this.deps.phases.importScanner.scan(
-			inventory,
-			config,
-			this.options,
-			this.logger,
-			this.fileSystem,
-		);
-	}
+  async scanImports(inventory: ProjectInventory): Promise<ProjectUsage> {
+    const config = this.ensureConfigLoaded();
+    this.logger.phase("Scanning Imports");
+    return await this.deps.phases.importScanner.scan(
+      inventory,
+      config,
+      this.options,
+      this.logger,
+      this.fileSystem,
+    );
+  }
 
-	async resolveGraph(
-		inventory: ProjectInventory,
-		usage: ProjectUsage,
-	): Promise<ResolvedGraph> {
-		const config = this.ensureConfigLoaded();
-		this.logger.phase("Resolving Dependency Graph");
-		return await this.deps.phases.graphResolver.resolve(
-			inventory,
-			usage,
-			config,
-			this.options,
-			this.logger,
-			this.fileSystem,
-		);
-	}
+  async resolveGraph(
+    inventory: ProjectInventory,
+    usage: ProjectUsage,
+  ): Promise<ResolvedGraph> {
+    const config = this.ensureConfigLoaded();
+    this.logger.phase("Resolving Dependency Graph");
+    return await this.deps.phases.graphResolver.resolve(
+      inventory,
+      usage,
+      config,
+      this.options,
+      this.logger,
+      this.fileSystem,
+    );
+  }
 
-	async emitChanges(
-		graph: ResolvedGraph,
-		inventory: ProjectInventory,
-	): Promise<EmitResult> {
-		const config = this.ensureConfigLoaded();
-		this.logger.phase("Emitting Changes");
-		return await this.deps.phases.changeEmitter.emit(
-			graph,
-			inventory,
-			config,
-			this.options,
-			this.logger,
-			this.fileSystem,
-		);
-	}
+  async emitChanges(
+    graph: ResolvedGraph,
+    inventory: ProjectInventory,
+  ): Promise<EmitResult> {
+    const config = this.ensureConfigLoaded();
+    this.logger.phase("Emitting Changes");
+    return await this.deps.phases.changeEmitter.emit(
+      graph,
+      inventory,
+      config,
+      this.options,
+      this.logger,
+      this.fileSystem,
+    );
+  }
 
-	get root(): string {
-		return this.options.rootDir;
-	}
+  async scanExports(
+    inventory: ProjectInventory,
+  ): Promise<ExportAnalysis | undefined> {
+    const config = this.ensureConfigLoaded();
 
-	getConfigPath(): string | undefined {
-		return this.options.configPath;
-	}
+    if (!this.deps.phases.exportScanner) {
+      return undefined;
+    }
 
-	get isDryRun(): boolean {
-		return this.options.dryRun ?? false;
-	}
+    this.logger.phase("Scanning Exports");
+    return await this.deps.phases.exportScanner.scan(
+      inventory,
+      config,
+      this.options,
+      this.logger,
+      this.fileSystem,
+    );
+  }
 
-	isVerbose(): boolean {
-		return this.options.verbose ?? false;
-	}
+  async detectUnusedExports(
+    exports: ExportAnalysis,
+    usage: ProjectUsage,
+    inventory: ProjectInventory,
+  ): Promise<UnusedExportsReport | undefined> {
+    const config = this.ensureConfigLoaded();
 
-	shouldFailOnStale(): boolean {
-		return this.options.failOnStale ?? false;
-	}
+    if (!this.deps.phases.unusedExportDetector) {
+      return undefined;
+    }
 
-	getConfig(): SyncConfig {
-		return this.ensureConfigLoaded();
-	}
+    this.logger.phase("Detecting Unused Exports");
+    return await this.deps.phases.unusedExportDetector.detect(
+      exports,
+      usage,
+      inventory,
+      config,
+      this.options,
+      this.logger,
+    );
+  }
 
-	private ensureConfigLoaded(): SyncConfig {
-		if (!this.config) {
-			throw new Error("Configuration must be loaded before running this phase");
-		}
-		return this.config;
-	}
+  get root(): string {
+    return this.options.rootDir;
+  }
+
+  getConfigPath(): string | undefined {
+    return this.options.configPath;
+  }
+
+  get isDryRun(): boolean {
+    return this.options.dryRun ?? false;
+  }
+
+  isVerbose(): boolean {
+    return this.options.verbose ?? false;
+  }
+
+  shouldFailOnStale(): boolean {
+    return this.options.failOnStale ?? false;
+  }
+
+  getConfig(): SyncConfig {
+    return this.ensureConfigLoaded();
+  }
+
+  private ensureConfigLoaded(): SyncConfig {
+    if (!this.config) {
+      throw new Error("Configuration must be loaded before running this phase");
+    }
+    return this.config;
+  }
 }

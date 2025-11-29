@@ -329,6 +329,17 @@ export async function runCli(
     console.log("\n═══ Scanning Imports ═══\n");
     const usage = await manager.scanImports(inventory);
 
+    // Optional: Scan exports and detect unused exports
+    const exportsAnalysis = await manager.scanExports(inventory);
+    let unusedExportsReport;
+    if (exportsAnalysis) {
+      unusedExportsReport = await manager.detectUnusedExports(
+        exportsAnalysis,
+        usage,
+        inventory,
+      );
+    }
+
     console.log("\n═══ Resolving Dependency Graph ═══\n");
     const graph = await manager.resolveGraph(inventory, usage);
 
@@ -389,6 +400,44 @@ export async function runCli(
           `        (also via: ${diamond.transitiveThrough.join(", ")})`,
         );
       }
+    }
+
+    // Report unused exports
+    if (unusedExportsReport && unusedExportsReport.unusedExports.length > 0) {
+      console.log("\n▶ Unused Exports");
+
+      // Group by project
+      const byProject = new Map<
+        string,
+        typeof unusedExportsReport.unusedExports
+      >();
+      for (const unusedExport of unusedExportsReport.unusedExports) {
+        if (!byProject.has(unusedExport.projectId)) {
+          byProject.set(unusedExport.projectId, []);
+        }
+        byProject.get(unusedExport.projectId)?.push(unusedExport);
+      }
+
+      for (const [projectId, exports] of byProject.entries()) {
+        console.log(
+          `\n  📦 ${projectId} (${exports.length} unused export${exports.length > 1 ? "s" : ""}):`,
+        );
+        for (const exp of exports.slice(0, 10)) {
+          const typeLabel = exp.isTypeOnly ? "[type]" : "";
+          const exportTypeLabel =
+            exp.exportType === "default" ? "[default]" : "";
+          console.log(
+            `      ${exp.exportName} ${typeLabel}${exportTypeLabel} (${exp.sourceFile})`,
+          );
+        }
+        if (exports.length > 10) {
+          console.log(`      ... and ${exports.length - 10} more`);
+        }
+      }
+
+      console.log(
+        `\n  Total: ${unusedExportsReport.unusedExports.length} unused export(s) across ${byProject.size} project(s)`,
+      );
     }
 
     if (warnings.length > 0) {

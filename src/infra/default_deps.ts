@@ -3,26 +3,30 @@ import { nodeFileSystem } from "./fs/node_fs.js";
 import { createConsoleLogger } from "./logger/console_logger.js";
 import { createChangeEmitter } from "./phases/change_emitter.js";
 import { createConfigLoader } from "./phases/config_loader.js";
+import { createExportScanner } from "./phases/export_scanner.js";
 import { createGraphResolver } from "./phases/graph_resolver.js";
 import { createImportScanner } from "./phases/import_scanner.js";
+import { createUnusedExportDetector } from "./phases/unused_export_detector.js";
 import { createWorkspaceDiscovery } from "./phases/workspace_discovery.js";
 
 interface DefaultDepsOptions {
-	verbose?: boolean;
+  verbose?: boolean;
 }
 
 export function createDefaultDeps(
-	options: DefaultDepsOptions = {},
+  options: DefaultDepsOptions = {},
 ): RepoManagerDeps {
-	return {
-		logger: createConsoleLogger(options.verbose ?? false),
-		fileSystem: nodeFileSystem,
-		phases: {
-			configLoader: createConfigLoader(),
-			workspaceDiscovery: createWorkspaceDiscovery(),
-			importScanner: createImportScanner(),
-			graphResolver: createGraphResolver(),
-			changeEmitter: createChangeEmitter(),
-		},
-	};
+  return {
+    logger: createConsoleLogger(options.verbose ?? false),
+    fileSystem: nodeFileSystem,
+    phases: {
+      configLoader: createConfigLoader(),
+      workspaceDiscovery: createWorkspaceDiscovery(),
+      importScanner: createImportScanner(),
+      graphResolver: createGraphResolver(),
+      changeEmitter: createChangeEmitter(),
+      exportScanner: createExportScanner(),
+      unusedExportDetector: createUnusedExportDetector(),
+    },
+  };
 }
