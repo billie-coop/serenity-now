@@ -1,6 +1,6 @@
 {
 	"name": "serenity-now",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"description": "A monorepo dependency management tool that keeps workspace dependencies in sync",
 	"type": "module",
 	"main": "./dist/index.js",
