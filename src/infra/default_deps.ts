@@ -10,23 +10,23 @@ import { createUnusedExportDetector } from "./phases/unused_export_detector.js";
 import { createWorkspaceDiscovery } from "./phases/workspace_discovery.js";
 
 interface DefaultDepsOptions {
-  verbose?: boolean;
+	verbose?: boolean;
 }
 
 export function createDefaultDeps(
-  options: DefaultDepsOptions = {},
+	options: DefaultDepsOptions = {},
 ): RepoManagerDeps {
-  return {
-    logger: createConsoleLogger(options.verbose ?? false),
-    fileSystem: nodeFileSystem,
-    phases: {
-      configLoader: createConfigLoader(),
-      workspaceDiscovery: createWorkspaceDiscovery(),
-      importScanner: createTypeScriptImportScanner(),
-      graphResolver: createGraphResolver(),
-      changeEmitter: createChangeEmitter(),
-      exportScanner: createTypeScriptExportScanner(),
-      unusedExportDetector: createUnusedExportDetector(),
-    },
-  };
+	return {
+		logger: createConsoleLogger(options.verbose ?? false),
+		fileSystem: nodeFileSystem,
+		phases: {
+			configLoader: createConfigLoader(),
+			workspaceDiscovery: createWorkspaceDiscovery(),
+			importScanner: createTypeScriptImportScanner(),
+			graphResolver: createGraphResolver(),
+			changeEmitter: createChangeEmitter(),
+			exportScanner: createTypeScriptExportScanner(),
+			unusedExportDetector: createUnusedExportDetector(),
+		},
+	};
 }
