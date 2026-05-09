@@ -1,16 +1,13 @@
-import type {
-	UnusedExportDetectorPort,
-	LoggerPort,
-} from "../../core/ports.js";
+import type { LoggerPort, UnusedExportDetectorPort } from "../../core/ports.js";
 import type {
 	ExportAnalysis,
-	ProjectUsage,
+	ExportRecord,
 	ProjectInventory,
+	ProjectUsage,
 	RepoManagerOptions,
 	SyncConfig,
-	UnusedExportsReport,
 	UnusedExport,
-	ExportRecord,
+	UnusedExportsReport,
 } from "../../core/types.js";
 
 /**
@@ -33,7 +30,7 @@ function extractPackageName(specifier: string): string {
 }
 
 /**
- * Builds a map of which exports are imported by other projects.
+ * Builds a map of which exports are imported by any project (including the same project).
  * Returns: Map of projectId → Set of imported export names
  */
 function buildImportedExportsMap(
@@ -48,7 +45,9 @@ function buildImportedExportsMap(
 	}
 
 	// Scan all usage records to find which exports are imported
-	for (const projectUsage of Object.values(usage.usage)) {
+	for (const [_importingProjectId, projectUsage] of Object.entries(
+		usage.usage,
+	)) {
 		for (const usageDetail of projectUsage.usageDetails) {
 			const packageName = extractPackageName(usageDetail.specifier);
 
@@ -64,6 +63,10 @@ function buildImportedExportsMap(
 
 			const importedSet = importedExports.get(targetProject.id);
 			if (!importedSet) continue;
+
+			// Track internal usage: if a project imports from itself, mark those exports as used
+			// This handles the case where a package exports something from its entry point
+			// and also uses it internally
 
 			// If we have named imports, track those specific symbols
 			if (usageDetail.namedImports && usageDetail.namedImports.length > 0) {
@@ -139,6 +142,7 @@ export function createUnusedExportDetector(): UnusedExportDetectorPort {
 							sourceFile: exportRecord.sourceFile,
 							isTypeOnly: exportRecord.isTypeOnly,
 							exportType: exportRecord.exportType,
+							isReExport: exportRecord.isReExport,
 						});
 					}
 				}

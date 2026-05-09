@@ -73,7 +73,8 @@ export const DOCS = {
 		},
 		{
 			flag: "--force, -f",
-			description: "Continue execution even if circular dependencies are detected",
+			description:
+				"Continue execution even if circular dependencies are detected",
 		},
 		{
 			flag: "--health",
