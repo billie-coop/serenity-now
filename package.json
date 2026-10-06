@@ -1,6 +1,6 @@
 {
 	"name": "serenity-now",
-	"version": "0.2.1",
+	"version": "0.3.0",
 	"description": "Keeps TypeScript monorepo workspace dependencies, tsconfig paths and project references in sync with your imports",
 	"type": "module",
 	"main": "./dist/index.js",
