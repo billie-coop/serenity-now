@@ -1,7 +1,7 @@
 {
 	"name": "serenity-now",
 	"version": "0.2.1",
-	"description": "A monorepo dependency management tool that keeps workspace dependencies in sync",
+	"description": "Keeps TypeScript monorepo workspace dependencies, tsconfig paths and project references in sync with your imports",
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
@@ -18,14 +18,14 @@
 		}
 	},
 	"scripts": {
-		"build": "tsup",
+		"build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
 		"dev": "tsx src/cli.ts",
 		"test": "vitest --coverage",
 		"format": "biome format --write .",
 		"lint": "biome lint .",
-		"check": "biome check --write . && tsc --noEmit",
-		"typecheck": "tsc --noEmit",
-		"prepublishOnly": "npm run check && npm test && npm run build"
+		"check": "biome check --write . && tsc",
+		"typecheck": "tsc",
+		"prepublishOnly": "npm run check && vitest run && npm run build"
 	},
 	"keywords": [
 		"monorepo",
@@ -45,18 +45,23 @@
 		"url": "https://github.com/billie-coop/serenity-now/issues"
 	},
 	"engines": {
-		"node": ">=20.0.0"
+		"node": ">=22.12.0"
+	},
+	"overrides": {
+		"picomatch": "$picomatch"
 	},
 	"dependencies": {
-		"fast-glob": "^3.3.2"
+		"jsonc-parser": "3.3.1",
+		"picomatch": "4.0.7",
+		"tinyglobby": "0.2.17",
+		"typescript": "7.0.2"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.3.7",
-		"@types/node": "^24.10.1",
-		"@vitest/coverage-v8": "^4.0.13",
-		"tsup": "^8.5.1",
-		"tsx": "^4.19.2",
-		"typescript": "^5.7.2",
-		"vitest": "^4.0.13"
+		"@biomejs/biome": "2.4.14",
+		"@types/node": "24.12.3",
+		"@types/picomatch": "4.0.3",
+		"@vitest/coverage-v8": "5.0.3",
+		"tsx": "4.23.15",
+		"vitest": "5.0.3"
 	}
 }

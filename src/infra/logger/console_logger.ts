@@ -7,7 +7,7 @@ class ConsoleLogger implements LoggerPort {
 	constructor(private readonly verbose = false) {}
 
 	phase(message: string): void {
-		console.log(`\n${cyan(bold(`Phase: ${message}`))}`);
+		console.log(`\n${cyan(bold(`═══ ${message} ═══`))}`);
 	}
 
 	info(message: string): void {
@@ -29,12 +29,12 @@ class ConsoleLogger implements LoggerPort {
 		}
 	}
 
-	getWarnings(): string[] {
-		return [...this.warnings];
-	}
-
 	success(message: string): void {
 		console.log(green(`✓ ${message}`));
+	}
+
+	getWarnings(): string[] {
+		return [...this.warnings];
 	}
 }
 

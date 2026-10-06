@@ -7,6 +7,7 @@ Welcome to the Serenity Now docs. Pick your starting point:
 - **[Getting Started](./getting-started.md)** - Install and set up Serenity Now in your monorepo
 - **[Configuration Reference](./configuration.md)** - Complete guide to all configuration options
 - **[How It Works](./how-it-works.md)** - Understand what Serenity Now does and why it matters
+- **[Architecture](./architecture.md)** - How the code is organized (for contributors)
 
 ## Quick Links
 
@@ -20,11 +21,11 @@ Welcome to the Serenity Now docs. Pick your starting point:
 Run it whenever you add or remove imports to workspace packages. Many teams run it:
 - After pulling changes (`npm run sync`)
 - Before committing (`pre-commit` hook)
-- In CI to verify everything stays in sync
+- In CI to verify everything stays in sync (`serenity-now --check`)
 
 ### What if I have circular dependencies?
 
-Serenity Now will detect and report them. Circular dependencies break TypeScript's incremental compilation, so you'll need to refactor to remove the cycle.
+Serenity Now detects and reports them, and won't sync until they're fixed (or you pass `--force`). Circular dependencies break TypeScript's incremental compilation, so you'll need to refactor to remove the cycle.
 
 ### Do I need to commit the config changes?
 

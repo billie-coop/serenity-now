@@ -1,165 +1,153 @@
 import { describe, expect, it } from "vitest";
-import type { PhasePorts, RepoManagerDeps } from "./ports.js";
+import {
+	makeAnalysis,
+	makeConfig,
+	makeInventory,
+	makeProject,
+	ROOT,
+} from "../test_support/builders.js";
+import { createCapturingLogger } from "../test_support/logger.js";
+import { createMemoryFs } from "../test_support/memory_fs.js";
+import type { RepoManagerDeps } from "./ports.js";
 import { RepoManager } from "./repo_manager.js";
-import { createMockLogger } from "./test-helpers.js";
-import type {
-	EmitResult,
-	ProjectInventory,
-	ProjectUsage,
-	RepoManagerOptions,
-	ResolvedGraph,
-	SyncConfig,
-} from "./types.js";
+import type { EmitResult, RepoManagerOptions } from "./types.js";
 
-function makeTestDeps(log: string[]): RepoManagerDeps {
-	const logger = createMockLogger({
-		phase: (msg: string) => log.push(`phase:${msg}`),
-	});
+const config = makeConfig();
+const ui = makeProject("@acme/ui");
+const web = makeProject("web", {
+	relativeRoot: "apps/web",
+	workspaceType: "app",
+});
+const inventory = makeInventory([web, ui]);
+const analysis = makeAnalysis(inventory, { web: ["@acme/ui"] });
+const emitResult: EmitResult = { fileChanges: [], skippedProjects: [] };
 
-	const fileSystem = {
-		readJson: <T>(_: string): Promise<T> => Promise.resolve({} as T),
-		writeJson: () => Promise.resolve(),
-		fileExists: () => Promise.resolve(true),
-		readText: () => Promise.resolve(""),
-		writeText: () => Promise.resolve(),
-	};
-
-	const phases: PhasePorts = {
-		configLoader: {
-			load: (options: RepoManagerOptions, _logger): Promise<SyncConfig> => {
-				log.push(`config-loader:${options.rootDir}`);
-				return Promise.resolve({ workspaceTypes: {} });
+function setup(options: Partial<RepoManagerOptions> = {}) {
+	const calls: Array<{ phase: string; args: unknown[] }> = [];
+	const logger = createCapturingLogger();
+	const fileSystem = createMemoryFs();
+	const deps: RepoManagerDeps = {
+		logger,
+		fileSystem,
+		phases: {
+			configLoader: {
+				load: async (...args) => {
+					calls.push({ phase: "load", args });
+					return config;
+				},
 			},
-		},
-		workspaceDiscovery: {
-			discover: (_config: SyncConfig): Promise<ProjectInventory> => {
-				log.push("workspace-discovery");
-				return Promise.resolve({
-					projects: {},
-					warnings: [],
-					workspaceConfigs: {},
-				});
+			workspaceDiscovery: {
+				discover: async (...args) => {
+					calls.push({ phase: "discover", args });
+					return inventory;
+				},
 			},
-		},
-		importScanner: {
-			scan: (
-				_inventory: ProjectInventory,
-				_config: SyncConfig,
-				_options: RepoManagerOptions,
-				_logger,
-				_fs,
-			): Promise<ProjectUsage> => {
-				log.push("import-scan");
-				return Promise.resolve({ usage: {}, warnings: [] });
+			sourceAnalyzer: {
+				analyze: async (...args) => {
+					calls.push({ phase: "analyze", args });
+					return analysis;
+				},
 			},
-		},
-		graphResolver: {
-			resolve: (): Promise<ResolvedGraph> => {
-				log.push("graph-resolve");
-				return Promise.resolve({
-					projects: {},
-					cycles: [],
-					diamonds: [],
-					warnings: [],
-				});
-			},
-		},
-		changeEmitter: {
-			emit: (): Promise<EmitResult> => {
-				log.push("change-emit");
-				return Promise.resolve({
-					filesModified: 0,
-					projectsUpdated: [],
-					staleDependencies: {},
-					warnings: [],
-				});
+			changeEmitter: {
+				emit: async (...args) => {
+					calls.push({ phase: "emit", args });
+					return emitResult;
+				},
 			},
 		},
 	};
-
-	return { logger, fileSystem, phases };
+	const repoOptions: RepoManagerOptions = { rootDir: ROOT, ...options };
+	return {
+		manager: new RepoManager(repoOptions, deps),
+		calls,
+		logger,
+		fileSystem,
+		repoOptions,
+	};
 }
 
 describe("RepoManager", () => {
-	it("orchestrates phases in order", async () => {
-		const log: string[] = [];
-		const deps = makeTestDeps(log);
-		const manager = new RepoManager({ rootDir: "/tmp" }, deps);
+	it("runs the phases in order, passing the loaded config along", async () => {
+		const { manager, calls, logger, fileSystem, repoOptions } = setup();
 
-		await manager.loadConfig();
-		const inventory = await manager.discoverWorkspace();
-		const usage = await manager.scanImports(inventory);
-		const graph = await manager.resolveGraph(inventory, usage);
-		const emitResult = await manager.emitChanges(graph, inventory);
+		expect(await manager.loadConfig()).toBe(config);
+		const inv = await manager.discoverWorkspace();
+		const result = await manager.analyzeSources(inv, { includeExports: true });
+		const graph = manager.resolveGraph(inv, result);
+		expect(await manager.emitChanges(graph, inv)).toBe(emitResult);
 
-		expect(emitResult.filesModified).toBe(0);
-		expect(log).toEqual([
-			"phase:Loading Configuration",
-			"config-loader:/tmp",
-			"phase:Discovering Workspace",
-			"workspace-discovery",
-			"phase:Scanning Imports",
-			"import-scan",
-			"phase:Resolving Dependency Graph",
-			"graph-resolve",
-			"phase:Emitting Changes",
-			"change-emit",
+		expect(calls.map((c) => c.phase)).toEqual([
+			"load",
+			"discover",
+			"analyze",
+			"emit",
+		]);
+		expect(calls[0]?.args).toEqual([repoOptions, logger, fileSystem]);
+		expect(calls[1]?.args).toEqual([config, repoOptions, logger, fileSystem]);
+		expect(calls[2]?.args).toEqual([
+			inventory,
+			config,
+			{ includeExports: true },
+			logger,
+		]);
+		expect(calls[3]?.args).toEqual([
+			graph,
+			inventory,
+			config,
+			repoOptions,
+			logger,
+			fileSystem,
+		]);
+
+		expect(logger.messages.phase).toEqual([
+			"Loading Configuration",
+			"Discovering Workspace",
+			"Analyzing Sources",
+			"Resolving Dependency Graph",
+			"Updating Files",
 		]);
 	});
 
-	it("enforces configuration before other phases", async () => {
-		const deps = makeTestDeps([]);
-		const manager = new RepoManager({ rootDir: "/tmp" }, deps);
-		await expect(() => manager.discoverWorkspace()).rejects.toThrow(
-			"Configuration must be loaded",
+	it("resolves the graph from the analysis", async () => {
+		const { manager, logger } = setup();
+		await manager.loadConfig();
+
+		const graph = manager.resolveGraph(inventory, analysis);
+
+		expect(Object.keys(graph.projects.web?.dependencies ?? {})).toEqual([
+			"@acme/ui",
+		]);
+		expect(logger.messages.info).toContain(
+			"→ 2 projects, 1 workspace dependencies",
 		);
 	});
 
-	it("provides access to options via getters", async () => {
-		const deps = makeTestDeps([]);
-		const options: RepoManagerOptions = {
-			rootDir: "/test/root",
-			configPath: "/test/config.json",
-			dryRun: true,
-			verbose: true,
-			failOnStale: true,
-		};
-		const manager = new RepoManager(options, deps);
-
-		expect(manager.root).toBe("/test/root");
-		expect(manager.getConfigPath()).toBe("/test/config.json");
-		expect(manager.isDryRun).toBe(true);
-		expect(manager.isVerbose()).toBe(true);
-		expect(manager.shouldFailOnStale()).toBe(true);
-	});
-
-	it("handles undefined optional options", () => {
-		const deps = makeTestDeps([]);
-		const options: RepoManagerOptions = {
-			rootDir: "/test/root",
-		};
-		const manager = new RepoManager(options, deps);
-
-		expect(manager.getConfigPath()).toBeUndefined();
-		expect(manager.isDryRun).toBe(false);
-		expect(manager.isVerbose()).toBe(false);
-		expect(manager.shouldFailOnStale()).toBe(false);
-	});
-
-	it("returns loaded config via getConfig", async () => {
-		const deps = makeTestDeps([]);
-		const manager = new RepoManager({ rootDir: "/tmp" }, deps);
-
+	it("names the emit phase for a dry run", async () => {
+		const { manager, logger } = setup({ dryRun: true });
 		await manager.loadConfig();
-		const config = manager.getConfig();
-
-		expect(config).toEqual({ workspaceTypes: {} });
+		await manager.emitChanges(
+			manager.resolveGraph(inventory, analysis),
+			inventory,
+		);
+		expect(logger.messages.phase).toContain("Checking Files");
+		expect(logger.messages.phase).not.toContain("Updating Files");
 	});
 
-	it("throws when getConfig called before loading", () => {
-		const deps = makeTestDeps([]);
-		const manager = new RepoManager({ rootDir: "/tmp" }, deps);
+	it("requires the config to be loaded first", async () => {
+		const { manager, calls } = setup();
+		const message = "Configuration must be loaded before running this phase";
 
-		expect(() => manager.getConfig()).toThrow("Configuration must be loaded");
+		await expect(manager.discoverWorkspace()).rejects.toThrow(message);
+		await expect(
+			manager.analyzeSources(inventory, { includeExports: false }),
+		).rejects.toThrow(message);
+		expect(() => manager.resolveGraph(inventory, analysis)).toThrow(message);
+		await expect(
+			manager.emitChanges(
+				{ projects: {}, cycles: [], diamonds: [] },
+				inventory,
+			),
+		).rejects.toThrow(message);
+		expect(calls).toEqual([]);
 	});
 });

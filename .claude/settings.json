@@ -1,0 +1,18 @@
+{
+	"permissions": {
+		"allow": [
+			"WebSearch",
+			"Bash(mkdir:*)",
+			"Bash(npx tsc *)",
+			"Bash(npx biome *)",
+			"Bash(npx vitest *)",
+			"Bash(npx tsup *)",
+			"Bash(git diff *)",
+			"Bash(git add *)",
+			"Bash(git commit -m ' *)",
+			"Bash(git rm *)"
+		],
+		"deny": [],
+		"ask": []
+	}
+}

@@ -48,7 +48,7 @@ describe("console logger", () => {
 		const logger = createConsoleLogger();
 		logger.phase("Test Phase");
 		expect(
-			capture.logs.some((line) => line.includes("Phase: Test Phase")),
+			capture.logs.some((line) => line.includes("═══ Test Phase ═══")),
 		).toBe(true);
 	});
 
@@ -64,9 +64,16 @@ describe("console logger", () => {
 		expect(capture.warns.some((line) => line.includes("Test warning"))).toBe(
 			true,
 		);
-		const warnings = logger.getWarnings?.();
+		const warnings = logger.getWarnings();
 		expect(warnings).toHaveLength(1);
-		expect(warnings?.[0]).toBe("Test warning");
+		expect(warnings[0]).toBe("Test warning");
+	});
+
+	it("returns a copy of the warnings", () => {
+		const logger = createConsoleLogger();
+		logger.warn("one");
+		logger.getWarnings().push("mutated");
+		expect(logger.getWarnings()).toEqual(["one"]);
 	});
 
 	it("logs error messages", () => {

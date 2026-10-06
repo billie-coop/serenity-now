@@ -7,7 +7,7 @@ Serenity Now keeps three things in sync so TypeScript's incremental compilation 
 In a TypeScript monorepo, you need to keep these three things aligned:
 
 1. **Your actual imports** - The code you write
-2. **package.json dependencies** - What npm/yarn/pnpm knows about
+2. **package.json dependencies** - What your package manager knows about
 3. **tsconfig.json references** - What TypeScript knows about
 
 When these drift apart, TypeScript can't properly type-check or incrementally compile your code.
@@ -47,33 +47,37 @@ Serenity Now automates the tedious work of keeping everything in sync:
 
 ### 1. Scans Your Imports
 
-It analyzes your source code to find all imports from other workspace packages:
+It loads each project's tsconfig files with the TypeScript 7 compiler: the root `tsconfig.json`, any `tsconfig.json` in a subdirectory (like a standalone `convex/tsconfig.json`), and tsconfig files those reference inside the project (like Vite's `tsconfig.app.json`). Nested tsconfig files only add sources to scan; serenity-now never writes to them, so they don't need `composite`. Then it reads every file those configs include to find imports of other workspace packages:
 
 ```typescript
 import { helper } from "@myorg/utils";
 import type { User } from "@myorg/types";
+export { Button } from "@myorg/ui";
+const charts = await import("@myorg/charts");
 ```
+
+Static imports, `export ... from`, `import x = require()`, dynamic `import()`, `require()` and `typeof import()` all count. Files are scanned wherever they live (`src/`, `app/`, `pages/`), as long as the tsconfig includes them.
+
+If a project's sources can't be scanned (no tsconfig files, or tsconfig files that include none of its own files), that project is reported and **never modified**. A tsconfig with errors stops the run.
 
 ### 2. Updates package.json
 
-Adds workspace dependencies for packages you actually import:
+Adds workspace dependencies for packages you actually import, using the configured `workspaceDependencyVersion`:
 
 ```json
 {
   "dependencies": {
-    "@myorg/utils": "workspace:*"
-  },
-  "devDependencies": {
+    "@myorg/utils": "workspace:*",
     "@myorg/types": "workspace:*"
   }
 }
 ```
 
-It also removes dependencies that are no longer imported.
+It also removes workspace packages from `dependencies` when nothing imports them anymore. Workspace packages you've put in `devDependencies` or `peerDependencies` stay there and are never removed, since tooling may use them in ways an import scan can't see.
 
-### 3. Updates tsconfig.json References
+### 3. Updates tsconfig.json Paths and References
 
-Adds TypeScript project references so incremental compilation works:
+Adds `compilerOptions.paths` pointing at each imported package's source entry point, plus TypeScript project references so incremental compilation works:
 
 ```jsonc
 {
@@ -90,21 +94,20 @@ Checks for common issues:
 
 - **Circular dependencies** - Package A depends on B, B depends on A (breaks TypeScript incremental compilation)
 - **Diamond dependencies** - Multiple packages depend on the same shared package
-- **Missing configurations** - Projects without `tsconfig.json` or `package.json`
-- **Naming violations** - Packages that don't match your configured naming pattern
+- **Missing configurations** - Projects without `tsconfig.json`, without a `name`, or not matching any workspace type
+- **Naming violations** - Packages that don't start with their workspace type's `enforceNamePrefix`
+
+Run `serenity-now health` for the full report.
 
 ## Understanding Diamond Dependencies
 
-A diamond dependency happens when multiple packages depend on the same shared package:
+A diamond dependency happens when a project imports a package directly *and* also depends on it through another dependency:
 
 ```
-    app-web
-      |
-      v
-   shared-utils  <-- Diamond!
-      ^
-      |
-    app-api
+        app-web
+       /       \
+      v         v
+  ui-kit ---> shared-utils   <-- app-web reaches shared-utils twice
 ```
 
 **When they're fine:**
@@ -124,12 +127,11 @@ Diamond dependencies can sometimes point to incomplete abstractions or architect
 **Example of a problematic pattern:**
 
 ```
-app-web --> database-utils
-app-api --> database-utils
-worker  --> database-utils
+app-web --> data-access --> database-utils
+app-web ------------------> database-utils
 ```
 
-This might suggest you need a `data-access` layer that wraps `database-utils`, so apps don't directly depend on database implementation details.
+`app-web` goes around `data-access` to reach `database-utils` directly. Maybe `data-access` is missing something `app-web` needs.
 
 **Use `universalUtilities` wisely:**
 
@@ -137,7 +139,7 @@ Mark packages as universal utilities when it's genuinely expected:
 
 ```jsonc
 {
-  "universalUtilities": ["logger", "types", "config"],
+  "universalUtilities": ["@myorg/logger", "@myorg/types"],
 }
 ```
 
@@ -206,4 +208,3 @@ This makes the tool predictable and prevents subtle bugs from silent assumptions
 - [TypeScript Composite Projects](https://www.typescriptlang.org/tsconfig#composite)
 - [npm Workspaces](https://docs.npmjs.com/cli/v7/using-npm/workspaces)
 - [yarn Workspaces](https://yarnpkg.com/features/workspaces)
-- [pnpm Workspaces](https://pnpm.io/workspaces)

@@ -30,17 +30,6 @@
 		}
 	},
 
-	// Dependencies that should be in every project
-	"defaultDependencies": [],
-
-	// Projects to ignore
-	"ignoreProjects": [],
-
 	// Import patterns to ignore
-	"ignoreImports": ["node:*", "react", "react-dom"],
-
-	// TypeScript configuration
-	"tsconfig": {
-		"incremental": true // Enable incremental compilation (default: true)
-	}
+	"ignoreImports": ["@example/generated-*"]
 }

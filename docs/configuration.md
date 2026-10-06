@@ -1,17 +1,20 @@
 # Configuration Reference
 
-Serenity Now is configured via `serenity-now.config.jsonc` in your monorepo root.
+Serenity Now is configured with `serenity-now.config.jsonc` in your monorepo root (JSON with comments and trailing commas). Use `--config <path>` to load a different file; a missing `--config` file is an error.
 
-## Full Configuration Schema
+The first time you run serenity-now without a config, it writes a commented template to `serenity-now.config.jsonc` and exits.
+
+Every option is validated. Unknown options, wrong types and invalid values are reported together, so a typo like `"workspaceType"` fails loudly instead of being ignored.
+
+## Full Schema
 
 ```jsonc
 {
-  // REQUIRED: Define your workspace types and their configurations
+  // REQUIRED: how your workspace is organized
   "workspaceTypes": {
     "apps/*": {
       "type": "app",
       "subType": "website",
-      "enforceNamePrefix": false,
       "requiresTsconfig": true,
       "packageJsonTemplate": {
         "private": true,
@@ -25,232 +28,78 @@ Serenity Now is configured via `serenity-now.config.jsonc` in your monorepo root
     },
     "packages/*": {
       "type": "shared-package",
-      "subType": "library",
       "enforceNamePrefix": "@myorg/",
-      "packageJsonTemplate": {
-        "files": ["dist", "types"],
-        "main": "./src/index.ts",
-      },
-      "tsconfigTemplate": {
-        "extends": "../../tsconfig.options",
-      },
     },
   },
 
-  // OPTIONAL: Dependencies to include in every project
+  // OPTIONAL (default "workspace:*"): version written for workspace dependencies
+  "workspaceDependencyVersion": "workspace:*",
+
+  // OPTIONAL: added to every project's dependencies
   "defaultDependencies": ["@myorg/common-types"],
 
-  // OPTIONAL: Packages that are used everywhere (logging, types, etc.)
-  "universalUtilities": ["logger", "types"],
+  // OPTIONAL: imported everywhere on purpose; not reported as diamonds
+  "universalUtilities": ["@myorg/logger"],
 
-  // OPTIONAL: Enforce package naming pattern
-  "packageNamePattern": "^@myorg/",
+  // OPTIONAL: package names to leave out of the workspace entirely
+  "ignoreProjects": ["legacy-app"],
 
-  // OPTIONAL: Additional patterns to exclude from import scanning
-  "excludePatterns": ["**/*.test.ts", "**/*.spec.ts"],
+  // OPTIONAL: import specifiers to ignore (glob patterns)
+  "ignoreImports": ["@myorg/generated-*"],
 
-  // OPTIONAL: Projects to completely ignore
-  "ignoreProjects": ["legacy-app", "deprecated-package"],
-
-  // OPTIONAL: Import patterns to ignore
-  "ignoreImports": ["react", "react-dom"],
-
-  // OPTIONAL: TypeScript configuration options
-  "tsconfig": {
-    "preserveOutDir": true,
-    "typeOnlyInDevDependencies": true,
-    "incremental": true,
-  },
+  // OPTIONAL: source files to skip, relative to each project root (glob patterns)
+  "excludePatterns": ["**/*.stories.tsx"],
 }
 ```
 
-## Field Descriptions
+## `workspaceTypes` (required)
 
-### `workspaceTypes` (required)
+Keys are glob patterns matched against each workspace project's directory, relative to the repo root (e.g. `apps/web`). **Patterns are checked in the order they appear and the first match wins**, so put exact keys and specific globs (`apps/tracker-mobile`, `apps/*-mobile`) before catch-alls (`apps/*`). A project that matches no pattern is an error. List a project in `ignoreProjects` to leave it out.
 
-Defines how your monorepo is organized. The key is a glob pattern matching workspace directories.
+Each entry has:
 
-Each workspace type configuration has:
+- **`type`** (required): `"app"` or `"shared-package"`. Only shared packages are analyzed by `detect-unused-exports`.
+- **`subType`**: one of `mobile`, `db`, `marketing`, `plugin`, `ui`, `website`, `library`, `other`.
+- **`enforceNamePrefix`**: package names must start with this string (an error otherwise). `false` means no prefix is enforced.
+- **`requiresTsconfig`** (default `true`): whether the project must have a root `tsconfig.json`. Without one, the project is still scanned through any nested `tsconfig.json` files (e.g. `convex/tsconfig.json`) and its `package.json` is synced; with no tsconfig files at all it can't be scanned, so sync never modifies it.
+- **`packageJsonTemplate`**: fields merged into the project's `package.json` on every sync.
+- **`tsconfigTemplate`**: fields merged into the project's `tsconfig.json` on every sync.
 
-- **`type`**: Either `"app"` or `"shared-package"`
-- **`subType`** (optional): Further categorize (e.g., `"mobile"`, `"website"`, `"library"`)
-- **`enforceNamePrefix`** (optional): Package name must start with this string, or `false` to disable
-- **`requiresTsconfig`** (optional): Whether `tsconfig.json` is required (default: `true`)
-- **`packageJsonTemplate`** (optional): Fields to merge into `package.json`
-- **`tsconfigTemplate`** (optional): Fields to merge into `tsconfig.json`
+Templates merge objects recursively and replace any other value (including arrays). `{{projectDir}}` in a string becomes the project's directory name.
 
-**Example:**
+## `workspaceDependencyVersion`
 
-```jsonc
-"workspaceTypes": {
-  "apps/*-mobile": {
-    "type": "app",
-    "subType": "mobile",
-    "enforceNamePrefix": false,
-    "packageJsonTemplate": {
-      "private": true,
-      "main": "index.js"
-    },
-    "tsconfigTemplate": {
-      "extends": "../../tsconfig.options",
-      "include": ["app/**/*", "src/**/*"]
-    }
-  },
-  "packages/*": {
-    "type": "shared-package",
-    "subType": "library",
-    "enforceNamePrefix": "@myorg/",
-    "packageJsonTemplate": {
-      "files": ["dist"],
-      "main": "./src/index.ts",
-      "exports": {
-        ".": "./src/index.ts"
-      }
-    }
-  }
-}
-```
+The version sync writes for workspace dependencies (default `"workspace:*"`, which yarn and bun understand). npm workspaces don't support the `workspace:` protocol, so use `"*"` with npm. Existing workspace dependencies with a different version are updated to match.
 
-**Template Variables:**
+## `defaultDependencies`
 
-- `{{projectDir}}` - The project's directory name
+Workspace packages added to every project's dependencies (except themselves), whether or not they're imported. Each must be a workspace package. Diamonds through these packages are expected and not reported as problems.
 
-**Why it matters:** These templates ensure consistent structure across your monorepo. Serenity Now will merge these templates into your workspace's `package.json` and `tsconfig.json` files.
+## `universalUtilities`
 
-### `defaultDependencies` (optional)
+Workspace packages that are meant to be imported everywhere (a logger, shared types). A project that imports one directly and also through another dependency is a "diamond". Diamonds through these packages are reported as expected rather than as a sign of an incomplete abstraction.
 
-Array of package names to automatically include as dependencies in every project.
+## `ignoreProjects`
 
-**Example:**
+Package names to leave out of the workspace: they aren't scanned, synced or required to match a workspace type.
 
-```jsonc
-"defaultDependencies": ["@myorg/ts-utils", "@myorg/common-types"]
-```
+## `ignoreImports`
 
-**Why it matters:** Useful for truly universal utilities that every package needs, like shared TypeScript configuration or utility types.
+Glob patterns of import specifiers to ignore, e.g. `"@myorg/generated-*"`. Imports of non-workspace packages are always ignored, so you don't need to list npm packages.
 
-### `universalUtilities` (optional)
+## `excludePatterns`
 
-Array of package name suffixes that are expected to be used by many packages.
+Glob patterns of source files and nested `tsconfig.json` files to skip, relative to each project's root (e.g. `"**/*.stories.tsx"`, `"fixtures/**"`). Without this option, serenity-now scans exactly the files each project's tsconfig includes. There are no hidden default exclusions; `node_modules` is the only thing always skipped.
 
-**Example:**
+Excluding files can make sync remove dependencies that only those files import.
 
-```jsonc
-"universalUtilities": ["logger", "types", "config"]
-```
+## Removed options
 
-**Why it matters:** These packages commonly create "diamond dependency" patterns. Listing them here prevents warnings about diamond dependencies for these specific packages.
+These options are rejected with a message explaining why:
 
-### `packageNamePattern` (optional)
-
-A regex pattern that all workspace package names must match.
-
-**Example:**
-
-```jsonc
-"packageNamePattern": "^@acme/"
-```
-
-**Why it matters:** Enforces consistent naming conventions across your monorepo. Packages that don't match will trigger warnings.
-
-### `excludePatterns` (optional)
-
-Additional glob patterns to exclude when scanning for imports.
-
-**Default exclusions** (always applied):
-
-- `**/node_modules/**`
-- `**/dist/**`
-- `**/.git/**`
-
-**Example:**
-
-```jsonc
-"excludePatterns": [
-  "**/*.test.ts",
-  "**/*.spec.ts",
-  "**/fixtures/**",
-  "**/mocks/**"
-]
-```
-
-**Why it matters:** Excludes test files, generated code, or other directories from import analysis. This prevents test-only dependencies from being added to production `package.json` files.
-
-### `ignoreProjects` (optional)
-
-Array of project names or paths to completely ignore during scanning.
-
-**Example:**
-
-```jsonc
-"ignoreProjects": ["legacy-app", "experimental-package"]
-```
-
-**Why it matters:** Useful for legacy code or experimental projects that don't follow your monorepo conventions.
-
-### `ignoreImports` (optional)
-
-Array of import specifiers to ignore when analyzing dependencies.
-
-**Example:**
-
-```jsonc
-"ignoreImports": ["react", "react-dom", "lodash"]
-```
-
-**Why it matters:** External dependencies (from npm) should be ignored when analyzing internal workspace dependencies.
-
-### `tsconfig` (optional)
-
-TypeScript-specific configuration options.
-
-**Fields:**
-
-- **`preserveOutDir`** (default: `false`): Don't modify the `outDir` setting in `tsconfig.json`
-- **`typeOnlyInDevDependencies`** (default: `false`): Put type-only imports in `devDependencies` instead of `dependencies`
-- **`incremental`** (default: `false`): Enable TypeScript incremental compilation
-
-**Example:**
-
-```jsonc
-"tsconfig": {
-  "preserveOutDir": true,
-  "typeOnlyInDevDependencies": true,
-  "incremental": true
-}
-```
+- `tsconfig` (`incremental`, `preserveOutDir`, `typeOnlyInDevDependencies`): these never had any effect.
+- Top-level `enforceNamePrefix`: set it per entry in `workspaceTypes` instead.
 
 ## Real-World Example
 
-For a complete, production-ready configuration, see the [billie-coop monorepo config](https://github.com/billie-coop/billie-coop-monorepo/blob/main/serenity-now.config.jsonc).
-
-## Configuration Location
-
-By default, Serenity Now looks for `serenity-now.config.jsonc` in the monorepo root.
-
-You can specify a custom path:
-
-```bash
-npx serenity-now --config path/to/custom-config.jsonc
-```
-
-## JSONC Support
-
-The configuration file supports JSONC (JSON with Comments), so you can add comments to document your choices:
-
-```jsonc
-{
-  // Our apps live in the apps/ directory
-  "workspaceTypes": {
-    "apps/*": {
-      "type": "app",
-      "packageJsonTemplate": {
-        "private": true, // Apps are never published
-      },
-    },
-  },
-
-  // Logger is used everywhere, so diamond deps are expected
-  "universalUtilities": ["logger"],
-}
-```
+For a production configuration, see the [billie-coop monorepo config](https://github.com/billie-coop/billie-coop-monorepo/blob/main/serenity-now.config.jsonc).
