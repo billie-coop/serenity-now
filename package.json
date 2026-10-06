@@ -36,6 +36,7 @@
 		"package-json"
 	],
 	"author": "",
+	"homepage": "https://billie-coop.github.io/serenity-now/",
 	"license": "MIT",
 	"repository": {
 		"type": "git",

@@ -26,6 +26,7 @@ A short map of the code for contributors.
   - `glob/`: the single glob matcher (picomatch) every pattern option uses.
 - `src/interface/cli/`: argument parsing (`node:util` `parseArgs`, built from `src/docs/content.ts`), help, the command runner and output formatters.
 - `src/test_support/`: shared test helpers (in-memory filesystem, temp repos, capturing logger). Excluded from the build.
+- `website/`: the docs site (Vite + React), a separate package so its dependencies never ship with serenity-now. The Docs view renders the root `README.md`, and the command cards come from `src/docs/content.ts`, so both stay in step with the CLI. The terminal demos in `website/src/demos.ts` are captured CLI output from `example/` and need updating when output formats change. Run it with `npm install && npm run dev` in `website/`; `.github/workflows/docs.yml` deploys it to GitHub Pages from `main`.
 
 ## TypeScript 7
 
