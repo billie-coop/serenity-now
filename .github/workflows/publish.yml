@@ -28,7 +28,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          # Node 24 ships npm 11, which trusted publishing (OIDC) requires
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - name: Set Git Identity
@@ -104,6 +105,11 @@ jobs:
         run: |
           git tag -a "v${{ steps.version.outputs.new_version }}" -m "Release v${{ steps.version.outputs.new_version }}"
 
+      # Publish before pushing anything, so a failed publish leaves no version
+      # bump or tag behind. Authenticates via npm trusted publishing (no token).
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+
       - name: Push release branch and tags
         run: |
           git push --follow-tags origin release
@@ -114,21 +120,10 @@ jobs:
           git merge release --no-edit
           git push
 
-      - name: Publish to npm
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Create GitHub Release
-        uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ steps.version.outputs.new_version }}
-          release_name: Release v${{ steps.version.outputs.new_version }}
-          body: |
-            Release v${{ steps.version.outputs.new_version }}
-
-            Published to npm: https://www.npmjs.com/package/serenity-now/v/${{ steps.version.outputs.new_version }}
-          draft: false
-          prerelease: false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.new_version }}"
+          gh release create "v$VERSION" --title "Release v$VERSION" \
+            --notes "Published to npm: https://www.npmjs.com/package/serenity-now/v/$VERSION"
