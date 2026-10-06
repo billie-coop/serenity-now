@@ -18,33 +18,23 @@ example/
 
 ## Testing
 
-From the example directory, run:
+Build serenity-now (`npm run build` in the repo root), then from the example directory run:
 
 ```bash
-# Dry run to see what would change
-deno run --allow-read --allow-write --allow-env ../cli.ts --dry-run
-
-# Actually update dependencies
-deno run --allow-read --allow-write --allow-env ../cli.ts
-
-# Verbose mode to see details
-deno run --allow-read --allow-write --allow-env ../cli.ts --verbose
+node ../dist/cli.js --dry-run   # see what would change
+node ../dist/cli.js             # update package.json and tsconfig.json files
+node ../dist/cli.js health      # cycles, diamonds, unused packages
 ```
 
 ## What to Test
 
-1. **Dependency Detection**: All packages start with empty dependencies. The tool should detect imports and add the correct workspace dependencies.
+1. **Dependency Detection**: each project's workspace dependencies match its imports.
 
-2. **Root TSConfig Management**: The root `tsconfig.json` should be updated with:
-   - `composite: true`
-   - `incremental: true`
-   - `references` to all projects
+2. **Template Application**: package.json and tsconfig.json files get the templates for their workspace type.
 
-3. **Template Application**: Package.json and tsconfig.json files should have templates applied based on workspace type configuration.
-
-4. **Dependency Graph**:
-   - `web` app should depend on `ui`, `api-client`, and `utils`
-   - `mobile` app should depend on `ui` and `api-client`
-   - `ui` should depend on `utils`
-   - `api-client` should depend on `utils`
-   - `utils` should have no dependencies
+3. **Dependency Graph**:
+   - `web` app depends on `ui`, `api-client`, and `utils`
+   - `mobile` app depends on `ui` and `api-client`
+   - `ui` depends on `utils`
+   - `api-client` depends on `utils`
+   - `utils` has no dependencies

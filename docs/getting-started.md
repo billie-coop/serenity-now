@@ -4,11 +4,12 @@ A quick guide to get Serenity Now running in your TypeScript monorepo.
 
 ## Prerequisites
 
-- Node.js >= 20.0.0
-- A TypeScript monorepo using npm/yarn/pnpm workspaces
+- Node.js >= 22.12
+- A TypeScript monorepo with workspaces declared in the root `package.json` (npm, yarn or bun)
 - Every workspace project must have:
   - `package.json` with a `name` field
-  - `tsconfig.json` for TypeScript configuration
+  - `tsconfig.json` (unless its workspace type sets `"requiresTsconfig": false`)
+- tsconfig files that are valid for TypeScript 7 (serenity-now analyzes your code with it)
 
 ## Installation
 
@@ -37,47 +38,43 @@ Edit `serenity-now.config.jsonc` to match your directory structure:
 ```jsonc
 {
   "workspaceTypes": {
-    "app": {
-      "patterns": ["apps/*"],
-    },
-    "shared-package": {
-      "patterns": ["packages/*"],
-    },
+    "apps/*": { "type": "app" },
+    "packages/*": { "type": "shared-package" },
   },
 }
 ```
 
-The `workspaceTypes` configuration is **required**. It tells Serenity Now how your monorepo is organized. Adjust the patterns to match your actual directory structure.
+The `workspaceTypes` configuration is **required**. Keys are glob patterns for project directories, and every workspace project must match one of them (the first matching pattern wins). Using npm? Also set `"workspaceDependencyVersion": "*"`, because npm doesn't support `workspace:*`.
+
+Packages that other projects import must declare an entry point in `package.json` (`exports`, `types` or `main`). Serenity Now maps it to the source file for `paths`; build output inside the package's tsconfig `outDir` is mapped back to its `rootDir`.
 
 ### 3. Run and Verify
 
 After configuring your workspace types, run Serenity Now to sync your dependencies:
 
 ```bash
-npx serenity-now --verbose
+npx serenity-now --dry-run   # see what would change
+npx serenity-now             # apply it
 ```
 
 This will:
 
-- Scan your imports to find internal workspace dependencies
-- Update `package.json` dependencies to match actual imports
-- Update `tsconfig.json` references for TypeScript project references
-- Remove unused dependencies and references
+- Scan every file each project's tsconfig includes for imports of other workspace packages
+- Add missing workspace dependencies to `package.json` and remove ones nothing imports
+- Update `compilerOptions.paths` and `references` in each project's `tsconfig.json`
+
+Comments, formatting and anything that isn't a workspace dependency are left untouched.
 
 ### 4. Set Up TypeScript Configuration (Recommended)
 
 For best results with TypeScript project references, use a two-file setup:
 
-**Root `tsconfig.json`** - Just for project references (managed by Serenity Now):
+**Root `tsconfig.json`** - Just for project references (you list your projects here; Serenity Now manages references between projects, not this file):
 
 ```jsonc
 {
   "files": [],
-  "references": [
-    // Serenity Now manages these references
-    { "path": "./apps/web" },
-    { "path": "./packages/utils" },
-  ],
+  "references": [{ "path": "./apps/web" }, { "path": "./packages/utils" }],
 }
 ```
 
@@ -86,8 +83,8 @@ For best results with TypeScript project references, use a two-file setup:
 ```jsonc
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "ESNext",
+    "target": "es2023",
+    "module": "nodenext",
     "strict": true,
     "composite": true,
     "declaration": true,
@@ -122,7 +119,7 @@ Add convenience scripts to your root `package.json`:
 {
   "scripts": {
     "sync": "serenity-now",
-    "sync:check": "serenity-now --dry-run --fail-on-stale"
+    "sync:check": "serenity-now --check"
   }
 }
 ```

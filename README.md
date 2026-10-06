@@ -62,7 +62,7 @@ Configure workspace types (apps vs libraries), enforce naming conventions, and p
 ## 🚫 What It's NOT
 
 - **Not a build tool** - Use Nx, Turborepo, or Moon for task running and caching
-- **Not a package manager** - Use npm/yarn/pnpm workspaces for dependency installation
+- **Not a package manager** - Use npm, yarn or bun workspaces for dependency installation
 - **Not for non-TypeScript monorepos** - It's TypeScript-first (though non-TS projects can coexist)
 - **Not trying to be clever** - It doesn't guess. If something's wrong, it tells you.
 
@@ -74,7 +74,7 @@ Modern monorepo tooling is modular. Different tools solve different problems:
 
 | Tool                         | What It Does                                      | Works With Serenity Now?                         |
 | ---------------------------- | ------------------------------------------------- | ------------------------------------------------ |
-| **npm/yarn/pnpm workspaces** | Installs dependencies, links workspace packages   | ✅ Yes - Required foundation                     |
+| **npm/yarn/bun workspaces**  | Installs dependencies, links workspace packages   | ✅ Yes - Required foundation                     |
 | **TypeScript**               | Type-checks your code                             | ✅ Yes - Serenity Now manages project references |
 | **Nx / Turborepo / Moon**    | Task running, caching, affected builds            | ✅ Yes - Complementary tools                     |
 | **Lerna**                    | Version bumping, publishing                       | ✅ Yes - Independent concerns                    |
@@ -99,26 +99,28 @@ npm install --save-dev serenity-now
 
 ## 🚀 Quick Start
 
-1. **Create config** (`serenity-now.config.jsonc`):
+1. **Run it once**: `npx serenity-now` creates a `serenity-now.config.jsonc` template in your repo root.
+
+2. **Describe your workspace**: every workspace project must match a pattern (the first match wins).
 
 ```jsonc
 {
   "workspaceTypes": {
-    "app": { "patterns": ["apps/*"] },
-    "shared-package": { "patterns": ["packages/*"] },
+    "apps/*": { "type": "app" },
+    "packages/*": { "type": "shared-package" },
   },
 }
 ```
 
-2. **Run**: `npx serenity-now`
+3. **Sync**: `npx serenity-now`
 
-3. **Add to scripts**:
+4. **Add to scripts**:
 
 ```json
 {
   "scripts": {
     "sync": "serenity-now",
-    "sync:check": "serenity-now --dry-run --fail-on-stale"
+    "sync:check": "serenity-now --check"
   }
 }
 ```
@@ -128,55 +130,65 @@ npm install --save-dev serenity-now
 ## 📖 Usage
 
 ```bash
-serenity-now              # Fix everything automatically
-serenity-now --dry-run    # Preview changes without modifying files
-serenity-now --verbose    # See detailed output
-serenity-now --health     # Show repo health report
-serenity-now --help       # Show all options
+serenity-now                         # Sync package.json and tsconfig.json files
+serenity-now --dry-run               # Preview changes without writing anything
+serenity-now --check                 # Exit 1 if anything is out of sync (CI)
+serenity-now health                  # Cycles, diamonds, unused packages
+serenity-now detect-unused-exports   # Exports of shared packages nothing imports
+serenity-now generate-report         # Write serenity-now-summary.md
+serenity-now --help                  # Show all commands and options
 ```
 
 ### Options
 
-| Flag                    | Description                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------ |
-| `--dry-run`, `-d`       | Preview changes without modifying files                                        |
-| `--verbose`, `-v`       | Enable verbose logging with detailed output                                    |
-| `--config`, `-c <path>` | Path to configuration file (default: serenity-now.config.jsonc)                |
-| `--fail-on-stale`       | Exit with error code if stale dependencies found (useful for CI)               |
-| `--force`, `-f`         | Continue even if circular dependencies detected                                |
-| `--health`              | Show detailed health report (unused packages, circular deps, diamond patterns) |
-| `--help`, `-h`          | Show help message                                                              |
+| Flag                    | Description                                                         |
+| ----------------------- | ------------------------------------------------------------------- |
+| `-d`, `--dry-run`       | Show what sync would change without writing files                   |
+| `--check`               | Like `--dry-run`, but exit with code 1 if any file is out of sync   |
+| `-f`, `--force`         | Sync even if there are circular dependencies                        |
+| `-c`, `--config <path>` | Path to the configuration file (default: serenity-now.config.jsonc) |
+| `-v`, `--verbose`       | Show detailed output                                                |
+| `-h`, `--help`          | Show help                                                           |
+
+### What sync changes
+
+For every project whose sources it could scan, sync:
+
+- adds each imported workspace package to `dependencies` (unless it's already in `devDependencies` or `peerDependencies`) and removes workspace packages from `dependencies` that nothing imports
+- sets `compilerOptions.paths` for imported workspace packages to their source entry points
+- adds `references` to imported workspace packages and removes references to ones no longer imported
+
+Everything else in those files (other dependencies, other paths, references to your own tsconfig files, comments and formatting) is left alone. A project whose sources couldn't be scanned is never modified.
+
+Imports are found with the TypeScript 7 compiler in every file each project's tsconfig files include: the root `tsconfig.json`, any `tsconfig.json` in a subdirectory (e.g. a standalone `convex/tsconfig.json`), and tsconfig files those reference inside the project (e.g. Vite's `tsconfig.app.json`). Nested tsconfig files are only read, never modified. Static imports, `export ... from`, `import x = require()`, dynamic `import()`, `require()` and `typeof import()` all count.
 
 ---
 
 ## ⚙️ Configuration
 
-Create `serenity-now.config.jsonc` in your monorepo root:
+See the [configuration reference](./docs/configuration.md) for every option. A fuller example:
 
 ```jsonc
 {
-  // Define workspace types and their glob patterns
   "workspaceTypes": {
-    "app": {
-      "patterns": ["apps/*"],
-      "subTypes": {
-        "website": ["apps/web"],
-        "api": ["apps/api"],
-      },
+    "apps/*": {
+      "type": "app",
+      "packageJsonTemplate": { "private": true },
     },
-    "shared-package": {
-      "patterns": ["packages/*"],
+    "packages/*": {
+      "type": "shared-package",
+      "enforceNamePrefix": "@myorg/",
     },
   },
 
-  // Packages expected to create diamond dependencies (e.g., logging, types)
-  "universalUtilities": ["logger", "types"],
+  // npm workspaces don't support the workspace: protocol
+  "workspaceDependencyVersion": "*",
 
-  // Enforce naming conventions (optional)
-  "packageNamePattern": "^@myorg/",
+  // Imported everywhere on purpose; not reported as diamond dependencies
+  "universalUtilities": ["@myorg/logger"],
 
-  // Exclude patterns from import scanning (optional)
-  "excludePatterns": ["**/node_modules/**", "**/dist/**", "**/*.test.ts"],
+  // Source files to skip, relative to each project
+  "excludePatterns": ["**/*.stories.tsx"],
 }
 ```
 
@@ -207,26 +219,20 @@ See [CLAUDE.md](CLAUDE.md) for full details.
 ```yaml
 # .github/workflows/ci.yml
 - name: Check dependencies are in sync
-  run: npm run sync:check
+  run: npx serenity-now --check
 ```
 
-```json
-{
-  "scripts": {
-    "sync:check": "serenity-now --dry-run --fail-on-stale"
-  }
-}
-```
+`--check` fails when any `package.json` or `tsconfig.json` would change, whether a dependency is missing or stale.
 
 ---
 
 ## 🏗️ Requirements
 
-- **Node.js** >= 20.0.0
-- **TypeScript monorepo** using npm/yarn/pnpm workspaces
-- Every workspace project must have:
-  - `package.json` with a `name` field
-  - `tsconfig.json` for TypeScript configuration
+- **Node.js** >= 22.12
+- **Workspaces declared in the root `package.json`** (npm, yarn or bun; pnpm's `pnpm-workspace.yaml` isn't read)
+- Every workspace project needs a `package.json` with a `name`, and a `tsconfig.json` (unless its workspace type sets `"requiresTsconfig": false`)
+- **TypeScript 7 compatible tsconfig files.** serenity-now analyzes your code with TypeScript 7, so options TypeScript 7 removed (such as `baseUrl` or `moduleResolution: "node"`) are reported as errors
+- Packages that other projects import must declare an entry point (`exports`, `types` or `main`). If it points at build output, the package's tsconfig `outDir`/`rootDir` is used to find the source file
 
 ---
 
