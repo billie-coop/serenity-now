@@ -1,12 +1,10 @@
 import type {
 	EmitResult,
-	ExportAnalysis,
 	ProjectInventory,
-	ProjectUsage,
 	RepoManagerOptions,
 	ResolvedGraph,
+	SourceAnalysis,
 	SyncConfig,
-	UnusedExportsReport,
 } from "./types.js";
 
 export interface LoggerPort {
@@ -16,12 +14,11 @@ export interface LoggerPort {
 	error(message: string): void;
 	debug(message: string): void;
 	success(message: string): void;
-	getWarnings?(): string[];
+	/** Every warning logged so far. */
+	getWarnings(): string[];
 }
 
 export interface FileSystemPort {
-	readJson<T>(path: string): Promise<T>;
-	writeJson(path: string, value: unknown): Promise<void>;
 	fileExists(path: string): Promise<boolean>;
 	readText(path: string): Promise<string>;
 	writeText(path: string, contents: string): Promise<void>;
@@ -44,25 +41,19 @@ export interface WorkspaceDiscoveryPort {
 	): Promise<ProjectInventory>;
 }
 
-export interface ImportScannerPort {
-	scan(
-		inventory: ProjectInventory,
-		config: SyncConfig,
-		options: RepoManagerOptions,
-		logger: LoggerPort,
-		fs: FileSystemPort,
-	): Promise<ProjectUsage>;
+export interface SourceAnalyzerOptions {
+	/** Also collect the exports of every shared package's entry point. */
+	includeExports: boolean;
 }
 
-export interface GraphResolverPort {
-	resolve(
+/** Reads every project's TypeScript sources (imports, entry points, exports). */
+export interface SourceAnalyzerPort {
+	analyze(
 		inventory: ProjectInventory,
-		usage: ProjectUsage,
 		config: SyncConfig,
-		options: RepoManagerOptions,
+		options: SourceAnalyzerOptions,
 		logger: LoggerPort,
-		fs: FileSystemPort,
-	): Promise<ResolvedGraph>;
+	): Promise<SourceAnalysis>;
 }
 
 export interface ChangeEmitterPort {
@@ -76,35 +67,11 @@ export interface ChangeEmitterPort {
 	): Promise<EmitResult>;
 }
 
-export interface ExportScannerPort {
-	scan(
-		inventory: ProjectInventory,
-		config: SyncConfig,
-		options: RepoManagerOptions,
-		logger: LoggerPort,
-		fs: FileSystemPort,
-	): Promise<ExportAnalysis>;
-}
-
-export interface UnusedExportDetectorPort {
-	detect(
-		exports: ExportAnalysis,
-		usage: ProjectUsage,
-		inventory: ProjectInventory,
-		config: SyncConfig,
-		options: RepoManagerOptions,
-		logger: LoggerPort,
-	): Promise<UnusedExportsReport>;
-}
-
 export interface PhasePorts {
 	configLoader: ConfigLoaderPort;
 	workspaceDiscovery: WorkspaceDiscoveryPort;
-	importScanner: ImportScannerPort;
-	graphResolver: GraphResolverPort;
+	sourceAnalyzer: SourceAnalyzerPort;
 	changeEmitter: ChangeEmitterPort;
-	exportScanner?: ExportScannerPort;
-	unusedExportDetector?: UnusedExportDetectorPort;
 }
 
 export interface RepoManagerDeps {

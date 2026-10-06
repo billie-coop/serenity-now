@@ -1,387 +1,195 @@
 import { isAbsolute, join } from "node:path";
+import { ConfigurationError, throwIfProblems } from "../../core/errors.js";
+import { isJsonObject } from "../../core/json.js";
 import type {
 	ConfigLoaderPort,
 	FileSystemPort,
 	LoggerPort,
 } from "../../core/ports.js";
-import type {
-	PackageJson,
-	RepoManagerOptions,
-	SyncConfig,
-	TsConfig,
-	WorkspaceTypeConfig,
+import {
+	type JsonObject,
+	type JsonValue,
+	type RepoManagerOptions,
+	type SyncConfig,
+	WORKSPACE_SUB_TYPES,
+	type WorkspaceSubType,
+	type WorkspaceTypeConfig,
 } from "../../core/types.js";
+import { parseJsonc } from "../json/jsonc.js";
+import { CONFIG_TEMPLATE, DEFAULT_CONFIG_FILENAME } from "./config_template.js";
 
-const DEFAULT_CONFIG_FILES = [
-	"serenity-now.config.jsonc",
-	"serenity-now.config.json",
-] as const;
+const REMOVED_KEYS: Record<string, string> = {
+	tsconfig:
+		'"tsconfig" was removed; its options (incremental, preserveOutDir, typeOnlyInDevDependencies) never had any effect',
+	enforceNamePrefix:
+		'top-level "enforceNamePrefix" was removed; set it per entry in "workspaceTypes"',
+};
 
-function getDefaultConfigFilename(): string {
-	// DEFAULT_CONFIG_FILES is a hardcoded array, so [0] is always defined
-	return DEFAULT_CONFIG_FILES[0];
-}
-
-const CONFIG_TEMPLATE = `{
-  // Serenity Now! Configuration
-  // This file configures how dependencies are synchronized across your monorepo
-
-  // Define workspace types and their configurations
-  "workspaceTypes": {
-    // Example: Match all projects in apps/ directory
-    "apps/*": {
-      "type": "app",  // "app" or "shared-package"
-      // Optional: Categorize further (mobile, db, website, etc.)
-      // "subType": "website",
-
-      // Optional: Enforce package name prefix
-      // "enforceNamePrefix": "@mycompany/",
-
-      // Optional: Template for package.json fields
-      // "packageJsonTemplate": {
-      //   "private": true
-      // },
-
-      // Optional: Template for tsconfig.json
-      // "tsconfigTemplate": {
-      //   "extends": "../../tsconfig.base.json"
-      // },
-
-      // Optional: Set to false for non-TypeScript projects (default: true)
-      // "requiresTsconfig": false
-    }
-  },
-
-  // Optional: Dependencies to always include in every project
-  "defaultDependencies": [],
-
-  // Optional: Projects to ignore during scanning
-  "ignoreProjects": [],
-
-  // Optional: Import patterns to ignore
-  "ignoreImports": [
-    // Example: "react", "node:*"
-  ],
-
-  // Optional: File patterns to exclude from scanning (glob syntax)
-  // Uncomment and customize as needed:
-  // "excludePatterns": [
-  //   "**/node_modules/**",
-  //   "**/dist/**",
-  //   "**/build/**",
-  //   "**/out/**",
-  //   "**/coverage/**",
-  //   "**/.turbo/**",
-  //   "**/.next/**",
-  //   "**/__tests__/**",
-  //   "**/*.test.ts",
-  //   "**/*.test.tsx",
-  //   "**/*.spec.ts",
-  //   "**/*.spec.tsx"
-  // ],
-
-  // Optional: Universal utility packages (won't be flagged as diamond dependencies)
-  // "universalUtilities": [],
-
-  // Optional: TypeScript configuration defaults
-  "tsconfig": {
-    // Enable incremental compilation with project references (recommended)
-    // "incremental": true  // Default: true
-  }
-}
-`;
-
-class ConfigError extends Error {}
-
-// Simple JSONC parser - strips comments and trailing commas
-function parseJsonc(text: string): unknown {
-	let result = "";
-	let inString = false;
-	let inSingleLineComment = false;
-	let inMultiLineComment = false;
-
-	for (let i = 0; i < text.length; i++) {
-		const char = text[i];
-		const next = text[i + 1];
-
-		// Handle string boundaries
-		if (char === '"' && (i === 0 || text[i - 1] !== "\\")) {
-			inString = !inString;
-			result += char;
-			continue;
-		}
-
-		// If in string, just add the character
-		if (inString) {
-			result += char;
-			continue;
-		}
-
-		// Handle multi-line comment end
-		if (inMultiLineComment) {
-			if (char === "*" && next === "/") {
-				inMultiLineComment = false;
-				i++; // Skip the '/'
-			}
-			continue;
-		}
-
-		// Handle single-line comment end
-		if (inSingleLineComment) {
-			if (char === "\n") {
-				inSingleLineComment = false;
-				result += char;
-			}
-			continue;
-		}
-
-		// Check for comment starts
-		if (char === "/" && next === "/") {
-			inSingleLineComment = true;
-			i++; // Skip the second '/'
-			continue;
-		}
-
-		if (char === "/" && next === "*") {
-			inMultiLineComment = true;
-			i++; // Skip the '*'
-			continue;
-		}
-
-		result += char;
+/** Validates raw config JSON, collecting every problem rather than stopping at the first. */
+export function validateConfig(raw: JsonValue): {
+	config?: SyncConfig;
+	problems: string[];
+} {
+	const problems: string[] = [];
+	if (!isJsonObject(raw)) {
+		return { problems: ["the configuration must be a JSON object"] };
 	}
 
-	// Remove trailing commas
-	result = result.replace(/,(\s*[}\]])/g, "$1");
-
-	return JSON.parse(result);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function ensureRecord(value: unknown, field: string): Record<string, unknown> {
-	if (!isRecord(value)) {
-		throw new ConfigError(`${field} must be an object`);
-	}
-	return value;
-}
-
-function ensureStringArray(value: unknown, field: string): string[] {
-	if (!Array.isArray(value)) {
-		throw new ConfigError(`${field} must be an array of strings`);
-	}
-	for (const item of value) {
-		if (typeof item !== "string") {
-			throw new ConfigError(`${field} must contain only strings`);
-		}
-	}
-	return [...value];
-}
-
-function ensureBoolean(value: unknown, field: string): boolean {
-	if (typeof value !== "boolean") {
-		throw new ConfigError(`${field} must be a boolean`);
-	}
-	return value;
-}
-
-function ensureString(value: unknown, field: string): string {
-	if (typeof value !== "string") {
-		throw new ConfigError(`${field} must be a string`);
-	}
-	return value;
-}
-
-function parseWorkspaceTypes(
-	value: unknown,
-): Record<string, WorkspaceTypeConfig> {
-	const record = ensureRecord(value, "workspaceTypes");
-	const result: Record<string, WorkspaceTypeConfig> = {};
-
-	for (const [pattern, configValue] of Object.entries(record)) {
-		const configRecord = ensureRecord(
-			configValue,
-			`workspaceTypes["${pattern}"]`,
-		);
-		const type = configRecord.type;
-		if (type !== "app" && type !== "shared-package") {
-			throw new ConfigError(
-				`workspaceTypes["${pattern}"].type must be "app" or "shared-package"`,
-			);
-		}
-
-		const workspaceConfig: WorkspaceTypeConfig = {
-			type,
-		};
-
-		if (configRecord.subType !== undefined) {
-			workspaceConfig.subType = ensureString(
-				configRecord.subType,
-				`workspaceTypes["${pattern}"].subType`,
-			) as WorkspaceTypeConfig["subType"];
-		}
-
-		if (configRecord.enforceNamePrefix !== undefined) {
-			const prefix = configRecord.enforceNamePrefix;
-			if (prefix !== false && typeof prefix !== "string") {
-				throw new ConfigError(
-					`workspaceTypes["${pattern}"].enforceNamePrefix must be a string or false`,
-				);
-			}
-			workspaceConfig.enforceNamePrefix = prefix;
-		}
-
-		if (configRecord.packageJsonTemplate !== undefined) {
-			workspaceConfig.packageJsonTemplate = ensureRecord(
-				configRecord.packageJsonTemplate,
-				`workspaceTypes["${pattern}"].packageJsonTemplate`,
-			) as Partial<PackageJson>;
-		}
-
-		if (configRecord.tsconfigTemplate !== undefined) {
-			workspaceConfig.tsconfigTemplate = ensureRecord(
-				configRecord.tsconfigTemplate,
-				`workspaceTypes["${pattern}"].tsconfigTemplate`,
-			) as Partial<TsConfig>;
-		}
-
-		if (configRecord.requiresTsconfig !== undefined) {
-			workspaceConfig.requiresTsconfig = ensureBoolean(
-				configRecord.requiresTsconfig,
-				`workspaceTypes["${pattern}"].requiresTsconfig`,
-			);
-		}
-
-		result[pattern] = workspaceConfig;
-	}
-
-	return result;
-}
-
-function parseTsConfig(value: unknown): SyncConfig["tsconfig"] {
-	const record = ensureRecord(value, "tsconfig");
-	const result: NonNullable<SyncConfig["tsconfig"]> = {};
-
-	if (record.preserveOutDir !== undefined) {
-		result.preserveOutDir = ensureBoolean(
-			record.preserveOutDir,
-			"tsconfig.preserveOutDir",
-		);
-	}
-	if (record.typeOnlyInDevDependencies !== undefined) {
-		result.typeOnlyInDevDependencies = ensureBoolean(
-			record.typeOnlyInDevDependencies,
-			"tsconfig.typeOnlyInDevDependencies",
-		);
-	}
-	if (record.incremental !== undefined) {
-		result.incremental = ensureBoolean(
-			record.incremental,
-			"tsconfig.incremental",
-		);
-	}
-
-	return result;
-}
-
-function validateSyncConfig(raw: unknown): SyncConfig {
-	const record = ensureRecord(raw, "config");
-	const config: SyncConfig = {};
-
-	if (record.workspaceTypes !== undefined) {
-		config.workspaceTypes = parseWorkspaceTypes(record.workspaceTypes);
-	}
-	if (record.defaultDependencies !== undefined) {
-		config.defaultDependencies = ensureStringArray(
-			record.defaultDependencies,
+	const fields = new FieldReader(raw, "", problems);
+	fields.rejectUnknown(
+		[
+			"$schema",
+			"workspaceTypes",
+			"workspaceDependencyVersion",
 			"defaultDependencies",
-		);
-	}
-	if (record.ignoreProjects !== undefined) {
-		config.ignoreProjects = ensureStringArray(
-			record.ignoreProjects,
-			"ignoreProjects",
-		);
-	}
-	if (record.ignoreImports !== undefined) {
-		config.ignoreImports = ensureStringArray(
-			record.ignoreImports,
-			"ignoreImports",
-		);
-	}
-	if (record.excludePatterns !== undefined) {
-		config.excludePatterns = ensureStringArray(
-			record.excludePatterns,
-			"excludePatterns",
-		);
-	}
-	if (record.universalUtilities !== undefined) {
-		config.universalUtilities = ensureStringArray(
-			record.universalUtilities,
 			"universalUtilities",
-		);
+			"ignoreProjects",
+			"ignoreImports",
+			"excludePatterns",
+		],
+		REMOVED_KEYS,
+	);
+
+	const workspaceTypes: Record<string, WorkspaceTypeConfig> = {};
+	const rawTypes = fields.object("workspaceTypes", { required: true });
+	for (const [pattern, value] of Object.entries(rawTypes ?? {})) {
+		const parsed = parseWorkspaceType(pattern, value, problems);
+		if (parsed) workspaceTypes[pattern] = parsed;
 	}
-	if (record.enforceNamePrefix !== undefined) {
-		config.enforceNamePrefix = ensureString(
-			record.enforceNamePrefix,
-			"enforceNamePrefix",
-		);
-	}
-	if (record.tsconfig !== undefined) {
-		config.tsconfig = parseTsConfig(record.tsconfig);
+	if (rawTypes && Object.keys(rawTypes).length === 0) {
+		problems.push('"workspaceTypes" must define at least one pattern');
 	}
 
-	return config;
+	const config: SyncConfig = {
+		workspaceTypes,
+		workspaceDependencyVersion:
+			fields.string("workspaceDependencyVersion") ?? "workspace:*",
+		defaultDependencies: fields.stringArray("defaultDependencies"),
+		universalUtilities: fields.stringArray("universalUtilities"),
+		ignoreProjects: fields.stringArray("ignoreProjects"),
+		ignoreImports: fields.stringArray("ignoreImports"),
+		excludePatterns: fields.stringArray("excludePatterns"),
+	};
+
+	return problems.length > 0 ? { problems } : { config, problems };
 }
 
-async function findConfigPath(
-	fs: FileSystemPort,
-	rootDir: string,
-	customPath?: string,
-): Promise<string | undefined> {
-	if (customPath) {
-		const resolved = isAbsolute(customPath)
-			? customPath
-			: join(rootDir, customPath);
-		if (await fs.fileExists(resolved)) {
-			return resolved;
-		}
+function parseWorkspaceType(
+	pattern: string,
+	value: JsonValue,
+	problems: string[],
+): WorkspaceTypeConfig | undefined {
+	const field = `workspaceTypes["${pattern}"]`;
+	if (!isJsonObject(value)) {
+		problems.push(`${field} must be an object`);
+		return undefined;
+	}
+	const fields = new FieldReader(value, `${field}.`, problems);
+	fields.rejectUnknown([
+		"type",
+		"subType",
+		"enforceNamePrefix",
+		"packageJsonTemplate",
+		"tsconfigTemplate",
+		"requiresTsconfig",
+	]);
+
+	const type = fields.string("type", { required: true });
+	if (type !== undefined && type !== "app" && type !== "shared-package") {
+		problems.push(`${field}.type must be "app" or "shared-package"`);
 		return undefined;
 	}
 
-	for (const filename of DEFAULT_CONFIG_FILES) {
-		const candidate = join(rootDir, filename);
-		if (await fs.fileExists(candidate)) {
-			return candidate;
+	const subType = fields.string("subType");
+	if (
+		subType !== undefined &&
+		!(WORKSPACE_SUB_TYPES as readonly string[]).includes(subType)
+	) {
+		problems.push(
+			`${field}.subType must be one of: ${WORKSPACE_SUB_TYPES.join(", ")}`,
+		);
+	}
+
+	const config: WorkspaceTypeConfig = {
+		type: type ?? "app",
+		requiresTsconfig: fields.boolean("requiresTsconfig") ?? true,
+	};
+	if (subType !== undefined) config.subType = subType as WorkspaceSubType;
+	// `false` explicitly opts out of a prefix.
+	if (value.enforceNamePrefix !== false) {
+		const prefix = fields.string("enforceNamePrefix");
+		if (prefix !== undefined) config.enforceNamePrefix = prefix;
+	}
+	const packageJsonTemplate = fields.object("packageJsonTemplate");
+	if (packageJsonTemplate) config.packageJsonTemplate = packageJsonTemplate;
+	const tsconfigTemplate = fields.object("tsconfigTemplate");
+	if (tsconfigTemplate) config.tsconfigTemplate = tsconfigTemplate;
+	return config;
+}
+
+/** Typed access to an object's fields that records a problem for each mistake. */
+class FieldReader {
+	constructor(
+		private readonly obj: JsonObject,
+		private readonly prefix: string,
+		private readonly problems: string[],
+	) {}
+
+	rejectUnknown(allowed: string[], removed: Record<string, string> = {}) {
+		for (const key of Object.keys(this.obj)) {
+			if (allowed.includes(key)) continue;
+			this.problems.push(
+				removed[key] ?? `unknown option "${this.prefix}${key}"`,
+			);
 		}
 	}
 
-	return undefined;
-}
+	string(key: string, opts: { required?: boolean } = {}) {
+		return this.read(key, "a string", (v) => typeof v === "string", opts) as
+			| string
+			| undefined;
+	}
 
-async function createConfigTemplate(
-	fs: FileSystemPort,
-	rootDir: string,
-	targetPath?: string,
-): Promise<string> {
-	const configPath = targetPath
-		? isAbsolute(targetPath)
-			? targetPath
-			: join(rootDir, targetPath)
-		: join(rootDir, getDefaultConfigFilename());
+	boolean(key: string) {
+		return this.read(key, "a boolean", (v) => typeof v === "boolean") as
+			| boolean
+			| undefined;
+	}
 
-	await fs.writeText(configPath, CONFIG_TEMPLATE);
-	return configPath;
-}
+	object(key: string, opts: { required?: boolean } = {}) {
+		return this.read(key, "an object", isJsonObject, opts) as
+			| JsonObject
+			| undefined;
+	}
 
-async function loadConfigFromFile(
-	path: string,
-	fs: FileSystemPort,
-): Promise<unknown> {
-	const contents = await fs.readText(path);
-	return parseJsonc(contents);
+	stringArray(key: string): string[] {
+		const value = this.read(
+			key,
+			"an array of strings",
+			(v) => Array.isArray(v) && v.every((item) => typeof item === "string"),
+		);
+		return (value as string[] | undefined) ?? [];
+	}
+
+	private read(
+		key: string,
+		expected: string,
+		check: (value: JsonValue) => boolean,
+		opts: { required?: boolean } = {},
+	): JsonValue | undefined {
+		const value = this.obj[key];
+		if (value === undefined) {
+			if (opts.required) {
+				this.problems.push(`"${this.prefix}${key}" is required`);
+			}
+			return undefined;
+		}
+		if (!check(value)) {
+			this.problems.push(`"${this.prefix}${key}" must be ${expected}`);
+			return undefined;
+		}
+		return value;
+	}
 }
 
 export function createConfigLoader(): ConfigLoaderPort {
@@ -391,36 +199,29 @@ export function createConfigLoader(): ConfigLoaderPort {
 			logger: LoggerPort,
 			fs: FileSystemPort,
 		): Promise<SyncConfig> {
-			const configPath = await findConfigPath(
-				fs,
-				options.rootDir,
-				options.configPath,
-			);
-
-			if (!configPath) {
-				const createdPath = await createConfigTemplate(
-					fs,
-					options.rootDir,
-					options.configPath,
-				);
-				logger.info(
-					`Created serenity-now config template at ${createdPath}. Please customize it and rerun.`,
-				);
-				throw new ConfigError("Configuration file created");
+			let configPath: string;
+			if (options.configPath) {
+				configPath = isAbsolute(options.configPath)
+					? options.configPath
+					: join(options.rootDir, options.configPath);
+				if (!(await fs.fileExists(configPath))) {
+					throw new ConfigurationError(`Config file not found: ${configPath}`);
+				}
+			} else {
+				configPath = join(options.rootDir, DEFAULT_CONFIG_FILENAME);
+				if (!(await fs.fileExists(configPath))) {
+					await fs.writeText(configPath, CONFIG_TEMPLATE);
+					throw new ConfigurationError(
+						`Created a config template at ${configPath}. Customize it and rerun.`,
+					);
+				}
 			}
 
-			logger.info(`Loading serenity-now config from ${configPath}`);
-
-			const rawConfig = await loadConfigFromFile(configPath, fs);
-			const config = validateSyncConfig(rawConfig);
-
-			if (config.enforceNamePrefix && !config.workspaceTypes) {
-				logger.warn(
-					"enforceNamePrefix is deprecated. Use workspaceTypes configuration instead.",
-				);
-			}
-
-			return config;
+			logger.info(`Loading config from ${configPath}`);
+			const raw = parseJsonc(await fs.readText(configPath), configPath);
+			const { config, problems } = validateConfig(raw);
+			throwIfProblems(`Invalid configuration in ${configPath}`, problems);
+			return config as SyncConfig;
 		},
 	};
 }

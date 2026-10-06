@@ -1,521 +1,323 @@
 import { describe, expect, it } from "vitest";
-import type { FileSystemPort } from "../../core/ports.js";
-import { createCapturingLogger } from "../../core/test-helpers.js";
-import type { WorkspaceTypeConfig } from "../../core/types.js";
-import { createConfigLoader } from "./config_loader.js";
+import { ConfigurationError } from "../../core/errors.js";
+import type { JsonValue } from "../../core/types.js";
+import { createCapturingLogger } from "../../test_support/logger.js";
+import { createMemoryFs } from "../../test_support/memory_fs.js";
+import { parseJsonc } from "../json/jsonc.js";
+import { createConfigLoader, validateConfig } from "./config_loader.js";
+import { CONFIG_TEMPLATE, DEFAULT_CONFIG_FILENAME } from "./config_template.js";
 
-class InMemoryFileSystem implements FileSystemPort {
-	#files = new Map<string, string>();
-	writtenPaths: string[] = [];
+const MINIMAL = { workspaceTypes: { "apps/*": { type: "app" } } };
 
-	constructor(initialFiles: Record<string, string> = {}) {
-		for (const [path, contents] of Object.entries(initialFiles)) {
-			this.#files.set(path, contents);
-		}
-	}
-
-	async readJson<T>(path: string): Promise<T> {
-		return JSON.parse(await this.readText(path)) as T;
-	}
-
-	async writeJson(path: string, value: unknown): Promise<void> {
-		await this.writeText(path, `${JSON.stringify(value, null, 2)}\n`);
-	}
-
-	fileExists(path: string): Promise<boolean> {
-		return Promise.resolve(this.#files.has(path));
-	}
-
-	readText(path: string): Promise<string> {
-		if (!this.#files.has(path)) {
-			throw new Error(`File not found: ${path}`);
-		}
-		return Promise.resolve(this.#files.get(path) as string);
-	}
-
-	writeText(path: string, contents: string): Promise<void> {
-		this.writtenPaths.push(path);
-		this.#files.set(path, contents);
-		return Promise.resolve();
-	}
+function problemsOf(raw: JsonValue): string[] {
+	return validateConfig(raw).problems;
 }
 
-describe("config loader", () => {
-	it("parses existing config", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      // comment line
-      "defaultDependencies": ["react"],
-      "workspaceTypes": {
-        "apps/*": { "type": "app", "subType": "website" }
-      }
-    }`,
+describe("validateConfig", () => {
+	it("normalizes optional settings to their defaults", () => {
+		const { config, problems } = validateConfig(MINIMAL);
+		expect(problems).toEqual([]);
+		expect(config).toEqual({
+			workspaceTypes: { "apps/*": { type: "app", requiresTsconfig: true } },
+			workspaceDependencyVersion: "workspace:*",
+			defaultDependencies: [],
+			universalUtilities: [],
+			ignoreProjects: [],
+			ignoreImports: [],
+			excludePatterns: [],
 		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
+	});
 
-		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
+	it("keeps every configured value", () => {
+		const { config, problems } = validateConfig({
+			$schema: "./schema.json",
+			workspaceTypes: {
+				"packages/*": {
+					type: "shared-package",
+					subType: "library",
+					enforceNamePrefix: "@acme/",
+					packageJsonTemplate: { private: true },
+					tsconfigTemplate: { extends: "../../tsconfig.base.json" },
+					requiresTsconfig: false,
+				},
+			},
+			workspaceDependencyVersion: "*",
+			defaultDependencies: ["@acme/logger"],
+			universalUtilities: ["@acme/types"],
+			ignoreProjects: ["@acme/legacy"],
+			ignoreImports: ["node:*"],
+			excludePatterns: ["**/*.test.ts"],
+		});
+		expect(problems).toEqual([]);
+		expect(config?.workspaceTypes["packages/*"]).toEqual({
+			type: "shared-package",
+			subType: "library",
+			enforceNamePrefix: "@acme/",
+			packageJsonTemplate: { private: true },
+			tsconfigTemplate: { extends: "../../tsconfig.base.json" },
+			requiresTsconfig: false,
+		});
+		expect(config?.workspaceDependencyVersion).toBe("*");
+		expect(config?.defaultDependencies).toEqual(["@acme/logger"]);
+		expect(config?.universalUtilities).toEqual(["@acme/types"]);
+		expect(config?.ignoreProjects).toEqual(["@acme/legacy"]);
+		expect(config?.ignoreImports).toEqual(["node:*"]);
+		expect(config?.excludePatterns).toEqual(["**/*.test.ts"]);
+	});
 
-		const expectedWorkspace: WorkspaceTypeConfig = {
+	it("requires an object", () => {
+		expect(problemsOf([])).toEqual(["the configuration must be a JSON object"]);
+		expect(validateConfig("nope").config).toBeUndefined();
+	});
+
+	it("requires workspaceTypes", () => {
+		expect(problemsOf({})).toEqual(['"workspaceTypes" is required']);
+	});
+
+	it("requires at least one workspace type pattern", () => {
+		expect(problemsOf({ workspaceTypes: {} })).toEqual([
+			'"workspaceTypes" must define at least one pattern',
+		]);
+	});
+
+	it("rejects unknown top-level keys", () => {
+		expect(problemsOf({ ...MINIMAL, workspaceType: {} })).toEqual([
+			'unknown option "workspaceType"',
+		]);
+	});
+
+	it("rejects unknown keys inside a workspace type", () => {
+		expect(
+			problemsOf({
+				workspaceTypes: { "apps/*": { type: "app", patterns: ["x"] } },
+			}),
+		).toEqual(['unknown option "workspaceTypes["apps/*"].patterns"']);
+	});
+
+	it("explains removed options", () => {
+		const problems = problemsOf({
+			...MINIMAL,
+			tsconfig: { incremental: true },
+			enforceNamePrefix: "@acme/",
+		});
+		expect(problems).toHaveLength(2);
+		expect(problems[0]).toContain('"tsconfig" was removed');
+		expect(problems[1]).toContain(
+			'top-level "enforceNamePrefix" was removed; set it per entry in "workspaceTypes"',
+		);
+	});
+
+	it("rejects wrongly typed top-level fields", () => {
+		expect(
+			problemsOf({
+				workspaceTypes: [],
+				workspaceDependencyVersion: 1,
+				defaultDependencies: "x",
+				universalUtilities: [1],
+				ignoreProjects: {},
+				ignoreImports: null,
+				excludePatterns: [true],
+			}),
+		).toEqual([
+			'"workspaceTypes" must be an object',
+			'"workspaceDependencyVersion" must be a string',
+			'"defaultDependencies" must be an array of strings',
+			'"universalUtilities" must be an array of strings',
+			'"ignoreProjects" must be an array of strings',
+			'"ignoreImports" must be an array of strings',
+			'"excludePatterns" must be an array of strings',
+		]);
+	});
+
+	it("rejects wrongly typed workspace type fields", () => {
+		expect(
+			problemsOf({
+				workspaceTypes: {
+					"apps/*": {
+						type: "app",
+						enforceNamePrefix: 1,
+						packageJsonTemplate: [],
+						tsconfigTemplate: "x",
+						requiresTsconfig: "yes",
+					},
+				},
+			}),
+		).toEqual([
+			'"workspaceTypes["apps/*"].requiresTsconfig" must be a boolean',
+			'"workspaceTypes["apps/*"].enforceNamePrefix" must be a string',
+			'"workspaceTypes["apps/*"].packageJsonTemplate" must be an object',
+			'"workspaceTypes["apps/*"].tsconfigTemplate" must be an object',
+		]);
+	});
+
+	it("treats enforceNamePrefix: false as no prefix", () => {
+		const { config, problems } = validateConfig({
+			workspaceTypes: { "apps/*": { type: "app", enforceNamePrefix: false } },
+		});
+		expect(problems).toEqual([]);
+		expect(config?.workspaceTypes["apps/*"]).toEqual({
 			type: "app",
-			subType: "website",
-		};
-		expect(config.defaultDependencies).toEqual(["react"]);
-		expect(config.workspaceTypes?.["apps/*"]).toEqual(expectedWorkspace);
+			requiresTsconfig: true,
+		});
+	});
+
+	it("rejects enforceNamePrefix values other than a string or false", () => {
+		for (const value of [true, 0, null, ["@acme/"]]) {
+			expect(
+				problemsOf({
+					workspaceTypes: {
+						"apps/*": { type: "app", enforceNamePrefix: value },
+					},
+				}),
+			).toEqual([
+				'"workspaceTypes["apps/*"].enforceNamePrefix" must be a string',
+			]);
+		}
+	});
+
+	it("requires a valid type for each workspace type", () => {
+		expect(problemsOf({ workspaceTypes: { "apps/*": {} } })).toEqual([
+			'"workspaceTypes["apps/*"].type" is required',
+		]);
 		expect(
-			logger.infos.some((msg) => msg.includes("Loading serenity-now config")),
-		).toBe(true);
+			problemsOf({ workspaceTypes: { "apps/*": { type: "library" } } }),
+		).toEqual([
+			'workspaceTypes["apps/*"].type must be "app" or "shared-package"',
+		]);
+		expect(problemsOf({ workspaceTypes: { "apps/*": "app" } })).toEqual([
+			'workspaceTypes["apps/*"] must be an object',
+		]);
 	});
 
-	it("creates template when missing", async () => {
-		const fs = new InMemoryFileSystem();
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		await expect(() =>
-			loader.load({ rootDir: "/repo" }, logger, fs),
-		).rejects.toThrow("Configuration file created");
-
-		expect(fs.writtenPaths).toEqual(["/repo/serenity-now.config.jsonc"]);
-		expect(
-			logger.infos.some((msg) =>
-				msg.includes("Created serenity-now config template"),
-			),
-		).toBe(true);
+	it("rejects an unknown subType", () => {
+		const problems = problemsOf({
+			workspaceTypes: { "apps/*": { type: "app", subType: "server" } },
+		});
+		expect(problems).toHaveLength(1);
+		expect(problems[0]).toMatch(/subType must be one of: mobile, db/);
 	});
 
-	it("validates workspace type entries", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "packages/*": { "type": "invalid" }
-      }
-    }`,
+	it("collects every problem at once", () => {
+		const problems = problemsOf({
+			workspaceTypes: {
+				"apps/*": { type: "nope" },
+				"packages/*": { type: "shared-package", extra: 1 },
+			},
+			defaultDependencies: "x",
+			bogus: true,
+		});
+		expect(problems).toHaveLength(4);
+	});
+});
+
+describe("createConfigLoader", () => {
+	const root = "/repo";
+	const defaultPath = `${root}/${DEFAULT_CONFIG_FILENAME}`;
+
+	it("loads JSONC with comments and trailing commas", async () => {
+		const fs = createMemoryFs({
+			[defaultPath]: `{
+	// apps
+	"workspaceTypes": {
+		"apps/*": { "type": "app", }, /* trailing */
+	},
+}`,
 		});
 		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		await expect(() =>
-			loader.load({ rootDir: "/repo" }, logger, fs),
-		).rejects.toThrow("workspaceTypes");
+		const config = await createConfigLoader().load(
+			{ rootDir: root },
+			logger,
+			fs,
+		);
+		expect(config.workspaceTypes["apps/*"]?.type).toBe("app");
+		expect(logger.messages.info).toEqual([
+			`Loading config from ${defaultPath}`,
+		]);
 	});
 
-	it("parses all optional fields", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "apps/*": { "type": "app" }
-      },
-      "excludePatterns": ["**/*.spec.ts", "**/*.test.ts"],
-      "universalUtilities": ["@repo/shared", "@repo/common"],
-      "enforceNamePrefix": "@repo/",
-      "ignoreProjects": ["docs"],
-      "ignoreImports": ["node:*"],
-      "tsconfig": {
-        "preserveOutDir": true,
-        "typeOnlyInDevDependencies": false,
-        "incremental": true
-      }
-    }`,
+	it("resolves a relative --config path against the root", async () => {
+		const fs = createMemoryFs({
+			[`${root}/config/custom.jsonc`]: JSON.stringify(MINIMAL),
 		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
-
-		expect(config.excludePatterns).toEqual(["**/*.spec.ts", "**/*.test.ts"]);
-		expect(config.universalUtilities).toEqual(["@repo/shared", "@repo/common"]);
-		expect(config.enforceNamePrefix).toBe("@repo/");
-		expect(config.ignoreProjects).toEqual(["docs"]);
-		expect(config.ignoreImports).toEqual(["node:*"]);
-		expect(config.tsconfig?.preserveOutDir).toBe(true);
-		expect(config.tsconfig?.typeOnlyInDevDependencies).toBe(false);
-		expect(config.tsconfig?.incremental).toBe(true);
+		const config = await createConfigLoader().load(
+			{ rootDir: root, configPath: "config/custom.jsonc" },
+			createCapturingLogger(),
+			fs,
+		);
+		expect(Object.keys(config.workspaceTypes)).toEqual(["apps/*"]);
 	});
 
-	it("parses minimal optional fields", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "apps/*": { "type": "app" }
-      },
-      "excludePatterns": ["**/*.spec.ts"],
-      "universalUtilities": ["@repo/shared"],
-      "enforceNamePrefix": "@repo/"
-    }`,
+	it("accepts an absolute --config path", async () => {
+		const fs = createMemoryFs({
+			"/elsewhere/c.jsonc": JSON.stringify(MINIMAL),
 		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
-
-		expect(config.excludePatterns).toEqual(["**/*.spec.ts"]);
-		expect(config.universalUtilities).toEqual(["@repo/shared"]);
-		expect(config.enforceNamePrefix).toBe("@repo/");
+		const config = await createConfigLoader().load(
+			{ rootDir: root, configPath: "/elsewhere/c.jsonc" },
+			createCapturingLogger(),
+			fs,
+		);
+		expect(config.workspaceDependencyVersion).toBe("workspace:*");
 	});
 
-	it("handles JSONC with escaped quotes in strings", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "apps/*": { "type": "app" }
-      },
-      "ignoreImports": ["Test \\"quoted\\" value"]
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
-
-		expect(config.workspaceTypes?.["apps/*"]).toBeDefined();
-		expect(config.ignoreImports?.[0]).toBe('Test "quoted" value');
-	});
-
-	it("handles JSONC with multi-line comments", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      /* This is a
-         multi-line comment
-         that spans multiple lines */
-      "workspaceTypes": {
-        "apps/*": { "type": "app" }
-      }
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
-
-		expect(config.workspaceTypes?.["apps/*"]).toBeDefined();
-	});
-
-	it("handles JSONC with single-line comments containing newlines", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      // First comment
-      "workspaceTypes": {
-        // Second comment
-        "apps/*": { "type": "app" }
-      }
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
-
-		expect(config.workspaceTypes?.["apps/*"]).toBeDefined();
-	});
-
-	it("returns undefined when custom config path does not exist", async () => {
-		const fs = new InMemoryFileSystem();
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		await expect(() =>
-			loader.load(
-				{ rootDir: "/repo", configPath: "/custom/path.json" },
-				logger,
+	it("fails without creating a file when --config doesn't exist", async () => {
+		const fs = createMemoryFs();
+		await expect(
+			createConfigLoader().load(
+				{ rootDir: root, configPath: "missing.jsonc" },
+				createCapturingLogger(),
 				fs,
 			),
-		).rejects.toThrow("Configuration file created");
+		).rejects.toThrow(`Config file not found: ${root}/missing.jsonc`);
+		expect(fs.files).toEqual({});
 	});
 
-	it("warns about deprecated enforceNamePrefix without workspaceTypes", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "enforceNamePrefix": "@repo/"
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
-
-		expect(config.enforceNamePrefix).toBe("@repo/");
-		expect(
-			logger.warns.some((msg) =>
-				msg.includes("enforceNamePrefix is deprecated"),
-			),
-		).toBe(true);
-	});
-
-	it("handles strings with comment-like content", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "apps/*": { "type": "app", "note": "Use // for comments" }
-      }
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
-
-		expect(config.workspaceTypes?.["apps/*"]).toBeDefined();
-	});
-
-	it("handles absolute custom config path", async () => {
-		const fs = new InMemoryFileSystem({
-			"/custom/config.json": `{
-      "workspaceTypes": {
-        "apps/*": { "type": "app" }
-      }
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		const config = await loader.load(
-			{ rootDir: "/repo", configPath: "/custom/config.json" },
-			logger,
-			fs,
+	it("writes the template and stops when no config exists", async () => {
+		const fs = createMemoryFs();
+		const error = await createConfigLoader()
+			.load({ rootDir: root }, createCapturingLogger(), fs)
+			.catch((e: unknown) => e);
+		expect(error).toBeInstanceOf(ConfigurationError);
+		expect((error as Error).message).toContain(
+			`Created a config template at ${defaultPath}`,
 		);
-
-		expect(config.workspaceTypes?.["apps/*"]).toBeDefined();
+		expect(fs.files[defaultPath]).toBe(CONFIG_TEMPLATE);
 	});
 
-	it("handles relative custom config path", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/custom/config.json": `{
-      "workspaceTypes": {
-        "apps/*": { "type": "app" }
-      }
-    }`,
+	it("reports the location of a syntax error", async () => {
+		const fs = createMemoryFs({
+			[defaultPath]: '{\n\t"workspaceTypes": {\n\t\t"apps/*": tru\n\t}\n}',
 		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
+		await expect(
+			createConfigLoader().load({ rootDir: root }, createCapturingLogger(), fs),
+		).rejects.toThrow(`${defaultPath}:3:13: invalid JSON`);
+	});
 
-		const config = await loader.load(
-			{ rootDir: "/repo", configPath: "custom/config.json" },
-			logger,
-			fs,
+	it("lists every validation problem in the error", async () => {
+		const fs = createMemoryFs({
+			[defaultPath]: JSON.stringify({ bogus: 1, defaultDependencies: 2 }),
+		});
+		const error = (await createConfigLoader()
+			.load({ rootDir: root }, createCapturingLogger(), fs)
+			.catch((e: unknown) => e)) as ConfigurationError;
+		expect(error).toBeInstanceOf(ConfigurationError);
+		expect(error.message).toContain(`Invalid configuration in ${defaultPath}`);
+		expect(error.problems).toEqual([
+			'unknown option "bogus"',
+			'"workspaceTypes" is required',
+			'"defaultDependencies" must be an array of strings',
+		]);
+	});
+});
+
+describe("CONFIG_TEMPLATE", () => {
+	it("parses and validates", () => {
+		const { config, problems } = validateConfig(
+			parseJsonc(CONFIG_TEMPLATE, "template"),
 		);
-
-		expect(config.workspaceTypes?.["apps/*"]).toBeDefined();
-	});
-
-	it("handles packageJsonTemplate in workspace config", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "apps/*": {
-          "type": "app",
-          "packageJsonTemplate": {
-            "private": true,
-            "version": "1.0.0"
-          }
-        }
-      }
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
-
-		expect(config.workspaceTypes?.["apps/*"]?.packageJsonTemplate).toEqual({
-			private: true,
-			version: "1.0.0",
-		});
-	});
-
-	it("handles tsconfigTemplate in workspace config", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "packages/*": {
-          "type": "shared-package",
-          "tsconfigTemplate": {
-            "extends": "../../tsconfig.base.json",
-            "compilerOptions": {
-              "declaration": true
-            }
-          }
-        }
-      }
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
-
-		expect(config.workspaceTypes?.["packages/*"]?.tsconfigTemplate).toEqual({
-			extends: "../../tsconfig.base.json",
-			compilerOptions: {
-				declaration: true,
-			},
-		});
-	});
-
-	it("handles requiresTsconfig in workspace config", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "scripts/*": {
-          "type": "app",
-          "requiresTsconfig": false
-        }
-      }
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
-
-		expect(config.workspaceTypes?.["scripts/*"]?.requiresTsconfig).toBe(false);
-	});
-
-	it("validates enforceNamePrefix must be string or false", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "apps/*": {
-          "type": "app",
-          "enforceNamePrefix": 123
-        }
-      }
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		await expect(() =>
-			loader.load({ rootDir: "/repo" }, logger, fs),
-		).rejects.toThrow("enforceNamePrefix must be a string or false");
-	});
-
-	it("allows enforceNamePrefix to be false", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "apps/*": {
-          "type": "app",
-          "enforceNamePrefix": false
-        }
-      }
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		const config = await loader.load({ rootDir: "/repo" }, logger, fs);
-
-		expect(config.workspaceTypes?.["apps/*"]?.enforceNamePrefix).toBe(false);
-	});
-
-	it("validates subType must be a string", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "apps/*": {
-          "type": "app",
-          "subType": 123
-        }
-      }
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		await expect(() =>
-			loader.load({ rootDir: "/repo" }, logger, fs),
-		).rejects.toThrow("must be a string");
-	});
-
-	it("validates packageJsonTemplate must be an object", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "apps/*": {
-          "type": "app",
-          "packageJsonTemplate": "not an object"
-        }
-      }
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		await expect(() =>
-			loader.load({ rootDir: "/repo" }, logger, fs),
-		).rejects.toThrow("must be an object");
-	});
-
-	it("validates tsconfigTemplate must be an object", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "apps/*": {
-          "type": "app",
-          "tsconfigTemplate": "not an object"
-        }
-      }
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		await expect(() =>
-			loader.load({ rootDir: "/repo" }, logger, fs),
-		).rejects.toThrow("must be an object");
-	});
-
-	it("validates ignoreImports must be an array", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "apps/*": { "type": "app" }
-      },
-      "ignoreImports": "not an array"
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		await expect(() =>
-			loader.load({ rootDir: "/repo" }, logger, fs),
-		).rejects.toThrow("must be an array of strings");
-	});
-
-	it("validates ignoreImports array items must be strings", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "apps/*": { "type": "app" }
-      },
-      "ignoreImports": ["valid", 123, "also-valid"]
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		await expect(() =>
-			loader.load({ rootDir: "/repo" }, logger, fs),
-		).rejects.toThrow("must contain only strings");
-	});
-
-	it("validates requiresTsconfig must be a boolean", async () => {
-		const fs = new InMemoryFileSystem({
-			"/repo/serenity-now.config.jsonc": `{
-      "workspaceTypes": {
-        "apps/*": {
-          "type": "app",
-          "requiresTsconfig": "not a boolean"
-        }
-      }
-    }`,
-		});
-		const logger = createCapturingLogger();
-		const loader = createConfigLoader();
-
-		await expect(() =>
-			loader.load({ rootDir: "/repo" }, logger, fs),
-		).rejects.toThrow("must be a boolean");
+		expect(problems).toEqual([]);
+		expect(Object.keys(config?.workspaceTypes ?? {})).toEqual([
+			"apps/*",
+			"packages/*",
+		]);
 	});
 });

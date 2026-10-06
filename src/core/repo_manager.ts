@@ -1,17 +1,17 @@
-import type { RepoManagerDeps } from "./ports.js";
+import { resolveGraph } from "./graph.js";
+import type { RepoManagerDeps, SourceAnalyzerOptions } from "./ports.js";
 import type {
 	EmitResult,
-	ExportAnalysis,
 	ProjectInventory,
-	ProjectUsage,
 	RepoManagerOptions,
 	ResolvedGraph,
+	SourceAnalysis,
 	SyncConfig,
-	UnusedExportsReport,
 } from "./types.js";
 
 /**
- * RepoManager orchestrates the main sync phases while depending only on ports.
+ * Runs the phases of a sync in order: load config, discover the workspace,
+ * analyze sources, resolve the dependency graph, and emit changes.
  */
 export class RepoManager {
 	private config?: SyncConfig;
@@ -21,145 +21,77 @@ export class RepoManager {
 		private readonly deps: RepoManagerDeps,
 	) {}
 
-	private get logger() {
-		return this.deps.logger;
-	}
-
-	private get fileSystem() {
-		return this.deps.fileSystem;
-	}
-
 	async loadConfig(): Promise<SyncConfig> {
-		this.logger.phase("Loading Configuration");
+		this.deps.logger.phase("Loading Configuration");
 		this.config = await this.deps.phases.configLoader.load(
 			this.options,
-			this.logger,
-			this.fileSystem,
+			this.deps.logger,
+			this.deps.fileSystem,
 		);
 		return this.config;
 	}
 
 	async discoverWorkspace(): Promise<ProjectInventory> {
-		const config = this.ensureConfigLoaded();
-		this.logger.phase("Discovering Workspace");
+		const config = this.requireConfig();
+		this.deps.logger.phase("Discovering Workspace");
 		return await this.deps.phases.workspaceDiscovery.discover(
 			config,
 			this.options,
-			this.logger,
-			this.fileSystem,
+			this.deps.logger,
+			this.deps.fileSystem,
 		);
 	}
 
-	async scanImports(inventory: ProjectInventory): Promise<ProjectUsage> {
-		const config = this.ensureConfigLoaded();
-		this.logger.phase("Scanning Imports");
-		return await this.deps.phases.importScanner.scan(
-			inventory,
-			config,
-			this.options,
-			this.logger,
-			this.fileSystem,
-		);
-	}
-
-	async resolveGraph(
+	async analyzeSources(
 		inventory: ProjectInventory,
-		usage: ProjectUsage,
-	): Promise<ResolvedGraph> {
-		const config = this.ensureConfigLoaded();
-		this.logger.phase("Resolving Dependency Graph");
-		return await this.deps.phases.graphResolver.resolve(
+		options: SourceAnalyzerOptions,
+	): Promise<SourceAnalysis> {
+		const config = this.requireConfig();
+		this.deps.logger.phase("Analyzing Sources");
+		return await this.deps.phases.sourceAnalyzer.analyze(
 			inventory,
-			usage,
 			config,
-			this.options,
-			this.logger,
-			this.fileSystem,
+			options,
+			this.deps.logger,
 		);
+	}
+
+	resolveGraph(
+		inventory: ProjectInventory,
+		analysis: SourceAnalysis,
+	): ResolvedGraph {
+		const config = this.requireConfig();
+		this.deps.logger.phase("Resolving Dependency Graph");
+		const graph = resolveGraph(inventory, analysis, config);
+		const edges = Object.values(graph.projects).reduce(
+			(sum, p) => sum + Object.keys(p.dependencies).length,
+			0,
+		);
+		this.deps.logger.info(
+			`→ ${Object.keys(graph.projects).length} projects, ${edges} workspace dependencies`,
+		);
+		return graph;
 	}
 
 	async emitChanges(
 		graph: ResolvedGraph,
 		inventory: ProjectInventory,
 	): Promise<EmitResult> {
-		const config = this.ensureConfigLoaded();
-		this.logger.phase("Emitting Changes");
+		const config = this.requireConfig();
+		this.deps.logger.phase(
+			this.options.dryRun ? "Checking Files" : "Updating Files",
+		);
 		return await this.deps.phases.changeEmitter.emit(
 			graph,
 			inventory,
 			config,
 			this.options,
-			this.logger,
-			this.fileSystem,
+			this.deps.logger,
+			this.deps.fileSystem,
 		);
 	}
 
-	async scanExports(
-		inventory: ProjectInventory,
-	): Promise<ExportAnalysis | undefined> {
-		const config = this.ensureConfigLoaded();
-
-		if (!this.deps.phases.exportScanner) {
-			return undefined;
-		}
-
-		this.logger.phase("Scanning Exports");
-		return await this.deps.phases.exportScanner.scan(
-			inventory,
-			config,
-			this.options,
-			this.logger,
-			this.fileSystem,
-		);
-	}
-
-	async detectUnusedExports(
-		exports: ExportAnalysis,
-		usage: ProjectUsage,
-		inventory: ProjectInventory,
-	): Promise<UnusedExportsReport | undefined> {
-		const config = this.ensureConfigLoaded();
-
-		if (!this.deps.phases.unusedExportDetector) {
-			return undefined;
-		}
-
-		this.logger.phase("Detecting Unused Exports");
-		return await this.deps.phases.unusedExportDetector.detect(
-			exports,
-			usage,
-			inventory,
-			config,
-			this.options,
-			this.logger,
-		);
-	}
-
-	get root(): string {
-		return this.options.rootDir;
-	}
-
-	getConfigPath(): string | undefined {
-		return this.options.configPath;
-	}
-
-	get isDryRun(): boolean {
-		return this.options.dryRun ?? false;
-	}
-
-	isVerbose(): boolean {
-		return this.options.verbose ?? false;
-	}
-
-	shouldFailOnStale(): boolean {
-		return this.options.failOnStale ?? false;
-	}
-
-	getConfig(): SyncConfig {
-		return this.ensureConfigLoaded();
-	}
-
-	private ensureConfigLoaded(): SyncConfig {
+	private requireConfig(): SyncConfig {
 		if (!this.config) {
 			throw new Error("Configuration must be loaded before running this phase");
 		}

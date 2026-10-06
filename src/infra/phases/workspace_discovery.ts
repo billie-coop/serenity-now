@@ -1,5 +1,7 @@
-import { join, relative } from "node:path";
-import fg from "fast-glob";
+import { dirname, join, posix } from "node:path";
+import { glob } from "tinyglobby";
+import { ConfigurationError, throwIfProblems } from "../../core/errors.js";
+import { isJsonObject } from "../../core/json.js";
 import type {
 	FileSystemPort,
 	LoggerPort,
@@ -11,101 +13,49 @@ import type {
 	ProjectInventory,
 	RepoManagerOptions,
 	SyncConfig,
-	WorkspaceTypeConfig,
 } from "../../core/types.js";
-import { assert } from "../../core/utils/assert.js";
+import { createMatcher } from "../glob/patterns.js";
+import { parseJsonc } from "../json/jsonc.js";
 
-interface GlobEntry {
-	path: string;
-	name: string;
-	isFile: boolean;
-}
+/** Lists package.json files (relative to rootDir) matching the workspace globs. */
+export type PackageJsonFinder = (
+	rootDir: string,
+	include: string[],
+	exclude: string[],
+) => Promise<string[]>;
 
-type Globber = (pattern: string) => AsyncIterable<GlobEntry>;
-
-async function* defaultGlobber(pattern: string): AsyncIterable<GlobEntry> {
-	const entries = await fg(pattern, {
-		onlyFiles: false,
-		markDirectories: true,
-		absolute: true,
+const findPackageJsonFiles: PackageJsonFinder = (rootDir, include, exclude) =>
+	glob(include, {
+		cwd: rootDir,
+		ignore: [...exclude, "**/node_modules/**"],
+		onlyFiles: true,
 	});
 
-	for (const path of entries) {
-		const isFile = !path.endsWith("/");
-		const name = path.split("/").pop() || "";
-
-		yield {
-			path: path.replace(/\/$/, ""), // Remove trailing slash
-			name,
-			isFile,
-		};
-	}
-}
-
-function normalizeWorkspacePatterns(
-	workspaces: PackageJson["workspaces"],
-): string[] {
-	if (!workspaces) {
-		return [];
-	}
-	if (Array.isArray(workspaces)) {
-		return workspaces.filter((pattern) => !pattern.startsWith("!"));
-	}
-	if (Array.isArray(workspaces.packages)) {
-		return workspaces.packages.filter((pattern) => !pattern.startsWith("!"));
-	}
-	return [];
-}
-
-function matchWorkspaceConfig(
-	projectRelativePath: string,
-	workspaceTypes: SyncConfig["workspaceTypes"],
-): WorkspaceTypeConfig | undefined {
-	if (!workspaceTypes) {
-		return undefined;
-	}
-
-	for (const [pattern, config] of Object.entries(workspaceTypes)) {
-		const regex = new RegExp(`^${pattern.replaceAll("*", "[^/]+")}$`);
-		if (regex.test(projectRelativePath)) {
-			return config;
+/**
+ * Splits the root package.json "workspaces" field into package.json globs to
+ * include and exclude ("!" patterns).
+ */
+export function workspaceGlobs(workspaces: PackageJson["workspaces"]): {
+	include: string[];
+	exclude: string[];
+} {
+	const patterns = Array.isArray(workspaces)
+		? workspaces
+		: (workspaces?.packages ?? []);
+	const include: string[] = [];
+	const exclude: string[] = [];
+	for (const pattern of patterns) {
+		if (pattern.startsWith("!")) {
+			exclude.push(posix.join(pattern.slice(1), "package.json"));
+		} else {
+			include.push(posix.join(pattern, "package.json"));
 		}
 	}
-	return undefined;
-}
-
-function validateNamePrefix(
-	packageName: string,
-	relativeRoot: string,
-	workspaceConfig?: WorkspaceTypeConfig,
-): string[] {
-	const warnings: string[] = [];
-	if (!workspaceConfig?.enforceNamePrefix) {
-		return warnings;
-	}
-	const prefix = workspaceConfig.enforceNamePrefix;
-	if (prefix && !packageName.startsWith(prefix)) {
-		warnings.push(
-			`Package ${packageName} at ${relativeRoot} should start with "${prefix}" based on workspace configuration`,
-		);
-	}
-	return warnings;
-}
-
-async function readJsonSafe<T>(
-	fs: FileSystemPort,
-	path: string,
-	defaultValue: T,
-): Promise<T> {
-	try {
-		return await fs.readJson<T>(path);
-	} catch {
-		return defaultValue;
-	}
+	return { include, exclude };
 }
 
 export function createWorkspaceDiscovery(
-	globber: Globber = defaultGlobber,
+	findFiles: PackageJsonFinder = findPackageJsonFiles,
 ): WorkspaceDiscoveryPort {
 	return {
 		async discover(
@@ -117,118 +67,111 @@ export function createWorkspaceDiscovery(
 			const rootDir = options.rootDir;
 			const rootPackageJsonPath = join(rootDir, "package.json");
 			if (!(await fs.fileExists(rootPackageJsonPath))) {
-				throw new Error("No package.json found in repo root");
+				throw new ConfigurationError(`No package.json found in ${rootDir}`);
+			}
+			const rootPackageJson = await readPackageJson(fs, rootPackageJsonPath);
+			const { include, exclude } = workspaceGlobs(rootPackageJson.workspaces);
+			if (include.length === 0) {
+				throw new ConfigurationError(
+					`No "workspaces" configured in ${rootPackageJsonPath}`,
+				);
 			}
 
-			const rootPackageJson = await readJsonSafe<PackageJson>(
-				fs,
-				rootPackageJsonPath,
-				{},
+			const patterns = Object.entries(config.workspaceTypes).map(
+				([pattern, typeConfig]) => ({
+					pattern,
+					typeConfig,
+					matches: createMatcher([pattern]),
+				}),
 			);
-
-			const patterns = normalizeWorkspacePatterns(rootPackageJson.workspaces);
-			if (patterns.length === 0) {
-				logger.warn("No workspaces configured in package.json");
-				return { projects: {}, warnings: [], workspaceConfigs: {} };
-			}
-
+			const isIgnored = new Set(config.ignoreProjects);
 			const projects: Record<string, ProjectInfo> = {};
-			const warnings: string[] = [];
-			const workspaceConfigs: Record<string, WorkspaceTypeConfig> = {};
+			const problems: string[] = [];
 
-			for (const pattern of patterns) {
-				const searchPattern = pattern.includes("*") ? pattern : `${pattern}/*`;
-				const globPattern = join(rootDir, searchPattern, "package.json");
-
-				for await (const entry of globber(globPattern)) {
-					if (!entry.isFile || entry.name !== "package.json") {
-						continue;
-					}
-					const projectRoot = entry.path.replace(/\/package\.json$/, "");
-					const relativeRoot = relative(rootDir, projectRoot);
-					if (relativeRoot.startsWith("..")) {
-						continue;
-					}
-
-					const packageJson = await readJsonSafe<PackageJson>(
-						fs,
-						entry.path,
-						{},
-					);
-					const packageName = packageJson.name;
-					if (!packageName) {
-						warnings.push(
-							`Skipping project at ${relativeRoot} with missing package name`,
-						);
-						continue;
-					}
-
-					// Skip if project should be ignored
-					if (config.ignoreProjects?.includes(packageName)) {
-						logger.debug(`Skipping ignored project: ${packageName}`);
-						continue;
-					}
-
-					const tsconfigPath = join(projectRoot, "tsconfig.json");
-					const hasTsconfig = await fs.fileExists(tsconfigPath);
-
-					const workspaceConfig = matchWorkspaceConfig(
-						relativeRoot,
-						config.workspaceTypes,
-					);
-
-					if (!workspaceConfig) {
-						warnings.push(
-							`Project ${packageName} at ${relativeRoot} does not match any configured workspace type patterns`,
-						);
-						// Still check for tsconfig even if no workspace config
-						if (!hasTsconfig) {
-							warnings.push(
-								`Project ${packageName} at ${relativeRoot} is missing tsconfig.json`,
-							);
-						}
-						continue;
-					}
-					workspaceConfigs[relativeRoot] = workspaceConfig;
-
-					const requiresTsconfig = workspaceConfig.requiresTsconfig ?? true;
-					if (!hasTsconfig && requiresTsconfig) {
-						warnings.push(
-							`Project ${packageName} at ${relativeRoot} is missing tsconfig.json`,
-						);
-					}
-
-					warnings.push(
-						...validateNamePrefix(packageName, relativeRoot, workspaceConfig),
-					);
-
-					const workspaceType = workspaceConfig.type ?? "unknown";
-					assert(
-						workspaceType === "app" ||
-							workspaceType === "shared-package" ||
-							workspaceType === "unknown",
-						() =>
-							new Error(
-								`Invalid workspace type for ${packageName}: ${workspaceType}`,
-							),
-					);
-
-					projects[packageName] = {
-						id: packageName,
-						root: projectRoot,
-						relativeRoot,
-						packageJson,
-						tsconfigPath: hasTsconfig ? tsconfigPath : undefined,
-						workspaceType: workspaceType,
-						workspaceSubType: workspaceConfig.subType ?? "unknown",
-						workspaceConfig,
-						isPrivate: packageJson.private ?? false,
-					};
+			const files = (await findFiles(rootDir, include, exclude)).sort();
+			for (const file of files) {
+				const relativeRoot = dirname(file).replaceAll("\\", "/");
+				const root = join(rootDir, relativeRoot);
+				let packageJson: PackageJson;
+				try {
+					packageJson = await readPackageJson(fs, join(root, "package.json"));
+				} catch (error) {
+					problems.push((error as Error).message);
+					continue;
 				}
+
+				const name = packageJson.name;
+				if (!name) {
+					problems.push(`${relativeRoot}/package.json has no "name"`);
+					continue;
+				}
+				if (isIgnored.has(name)) {
+					logger.debug(`Ignoring project ${name}`);
+					continue;
+				}
+				const existing = projects[name];
+				if (existing) {
+					problems.push(
+						`Package name "${name}" is used by both ${existing.relativeRoot} and ${relativeRoot}`,
+					);
+					continue;
+				}
+
+				// First match in config order wins, so specific patterns go before catch-alls.
+				const typeConfig = patterns.find((p) =>
+					p.matches(relativeRoot),
+				)?.typeConfig;
+				if (!typeConfig) {
+					problems.push(
+						`${name} (${relativeRoot}) doesn't match any "workspaceTypes" pattern (add one, or list it in "ignoreProjects")`,
+					);
+					continue;
+				}
+
+				if (
+					typeConfig.enforceNamePrefix &&
+					!name.startsWith(typeConfig.enforceNamePrefix)
+				) {
+					problems.push(
+						`${name} (${relativeRoot}) must be named with the prefix "${typeConfig.enforceNamePrefix}"`,
+					);
+				}
+
+				const tsconfigPath = join(root, "tsconfig.json");
+				const hasTsconfig = await fs.fileExists(tsconfigPath);
+				if (!hasTsconfig && typeConfig.requiresTsconfig) {
+					problems.push(
+						`${name} (${relativeRoot}) has no tsconfig.json (set "requiresTsconfig": false for projects without TypeScript)`,
+					);
+				}
+
+				projects[name] = {
+					id: name,
+					root,
+					relativeRoot,
+					packageJson,
+					tsconfigPath: hasTsconfig ? tsconfigPath : undefined,
+					workspaceType: typeConfig.type,
+					workspaceSubType: typeConfig.subType,
+					workspaceConfig: typeConfig,
+					isPrivate: packageJson.private ?? false,
+				};
 			}
 
+			throwIfProblems("Workspace configuration problems", problems);
 			logger.info(`→ Found ${Object.keys(projects).length} projects`);
-			return { projects, warnings, workspaceConfigs };
+			return { projects };
 		},
 	};
+}
+
+async function readPackageJson(
+	fs: FileSystemPort,
+	path: string,
+): Promise<PackageJson> {
+	const value = parseJsonc(await fs.readText(path), path);
+	if (!isJsonObject(value)) {
+		throw new ConfigurationError(`${path} must contain a JSON object`);
+	}
+	return value as PackageJson;
 }

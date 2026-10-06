@@ -1,54 +1,82 @@
 // Core domain models for the Serenity Now tool
 
-// Type aliases for any types (following existing pattern in original codebase)
-// biome-ignore lint/suspicious/noExplicitAny: intentional for legacy compatibility
-export type FixMe = any;
-// biome-ignore lint/suspicious/noExplicitAny: intentional for legacy compatibility
-export type NoFix = any;
+export type JsonValue =
+	| string
+	| number
+	| boolean
+	| null
+	| JsonValue[]
+	| { [key: string]: JsonValue };
+
+export type JsonObject = { [key: string]: JsonValue };
 
 export interface RepoManagerOptions {
 	rootDir: string;
 	configPath?: string;
 	dryRun?: boolean;
 	verbose?: boolean;
-	failOnStale?: boolean;
-	force?: boolean;
-	health?: boolean;
 }
 
-export type WorkspaceSubType =
-	| "mobile"
-	| "db"
-	| "marketing"
-	| "plugin"
-	| "ui"
-	| "website"
-	| "library"
-	| "other"
-	| "unknown";
+export const WORKSPACE_SUB_TYPES = [
+	"mobile",
+	"db",
+	"marketing",
+	"plugin",
+	"ui",
+	"website",
+	"library",
+	"other",
+] as const;
+
+export type WorkspaceSubType = (typeof WORKSPACE_SUB_TYPES)[number];
+
+export type WorkspaceType = "app" | "shared-package";
 
 export interface WorkspaceTypeConfig {
-	type: "app" | "shared-package";
+	type: WorkspaceType;
 	subType?: WorkspaceSubType;
-	enforceNamePrefix?: string | false;
-	packageJsonTemplate?: Partial<PackageJson>;
-	tsconfigTemplate?: Partial<TsConfig>;
-	requiresTsconfig?: boolean; // Default: true
+	enforceNamePrefix?: string;
+	packageJsonTemplate?: JsonObject;
+	tsconfigTemplate?: JsonObject;
+	requiresTsconfig: boolean;
 }
 
+/** Fully validated configuration. Optional settings are normalized to their defaults. */
 export interface SyncConfig {
-	workspaceTypes?: Record<string, WorkspaceTypeConfig>;
-	defaultDependencies?: string[];
-	ignoreProjects?: string[];
-	ignoreImports?: string[];
-	excludePatterns?: string[];
-	universalUtilities?: string[];
-	enforceNamePrefix?: string;
-	tsconfig?: {
-		preserveOutDir?: boolean;
-		typeOnlyInDevDependencies?: boolean;
-		incremental?: boolean;
+	workspaceTypes: Record<string, WorkspaceTypeConfig>;
+	workspaceDependencyVersion: string;
+	defaultDependencies: string[];
+	universalUtilities: string[];
+	ignoreProjects: string[];
+	ignoreImports: string[];
+	excludePatterns: string[];
+}
+
+export interface PackageJson {
+	name?: string;
+	version?: string;
+	private?: boolean;
+	workspaces?: string[] | { packages?: string[] };
+	dependencies?: Record<string, string>;
+	devDependencies?: Record<string, string>;
+	peerDependencies?: Record<string, string>;
+	types?: string;
+	typings?: string;
+	main?: string;
+	module?: string;
+	exports?: JsonValue;
+}
+
+export interface TsConfig {
+	extends?: string | string[];
+	compilerOptions?: {
+		paths?: Record<string, string[]>;
+		[key: string]: JsonValue | undefined;
 	};
+	files?: string[];
+	include?: string[];
+	exclude?: string[];
+	references?: Array<{ path: string }>;
 }
 
 export interface ProjectInfo {
@@ -57,86 +85,81 @@ export interface ProjectInfo {
 	relativeRoot: string;
 	packageJson: PackageJson;
 	tsconfigPath?: string;
-	workspaceType: "app" | "shared-package" | "unknown";
-	workspaceSubType: WorkspaceSubType;
-	workspaceConfig?: WorkspaceTypeConfig;
+	workspaceType: WorkspaceType;
+	workspaceSubType?: WorkspaceSubType;
+	workspaceConfig: WorkspaceTypeConfig;
 	isPrivate: boolean;
 }
 
 export interface ProjectInventory {
 	projects: Record<string, ProjectInfo>;
-	warnings: string[];
-	workspaceConfigs: Record<string, WorkspaceTypeConfig>;
 }
 
-export interface UsageRecord {
+// Source analysis
+
+/** Which exports of the imported module a single import statement uses. */
+export type ImportedBindings =
+	| { kind: "named"; names: string[] }
+	/** Every export may be used: `import * as`, `export *`, `import()`, `require()`. */
+	| { kind: "namespace" }
+	| { kind: "side-effect" };
+
+/** An import of a workspace package found in a project's source files. */
+export interface WorkspaceImport {
 	dependencyId: string;
 	specifier: string;
+	/** Path relative to the importing project's root. */
+	sourceFile: string;
 	isTypeOnly: boolean;
-	sourceFile: string;
-	namedImports?: string[]; // Named imports from this dependency, e.g., ["foo", "bar"]
+	bindings: ImportedBindings;
 }
 
-export interface ProjectUsageRecord {
-	dependencies: string[];
-	typeOnlyDependencies: string[];
-	usageDetails: UsageRecord[];
-}
+export type ProjectScan =
+	| { status: "scanned"; fileCount: number; imports: WorkspaceImport[] }
+	/** The project's sources could not be read; it must not be modified. */
+	| { status: "skipped"; reason: string };
 
-export interface ProjectUsage {
-	usage: Record<string, ProjectUsageRecord>;
-	warnings: string[];
-}
+export type EntryPointResolution =
+	/** `path` is the TypeScript source entry point, relative to the project root. */
+	| { status: "resolved"; path: string }
+	| { status: "unresolved"; reason: string };
 
-// Export tracking types
 export interface ExportRecord {
-	exportName: string; // The name of the export
-	sourceFile: string; // Relative path to the file that exports it
-	isTypeOnly: boolean; // Whether it's a type-only export
-	exportType: "named" | "default" | "namespace"; // Type of export
-	isReExport: boolean; // Whether this came from export * (wildcard re-export)
-}
-
-export interface ProjectExports {
-	projectId: string;
-	exports: ExportRecord[];
-}
-
-export interface ExportAnalysis {
-	projects: Record<string, ProjectExports>; // projectId → exports
-	warnings: string[];
-}
-
-// Unused export tracking
-export interface UnusedExport {
-	projectId: string;
 	exportName: string;
-	sourceFile: string;
 	isTypeOnly: boolean;
 	exportType: "named" | "default" | "namespace";
+	/** Whether the export reaches the entry point through `export * from`. */
 	isReExport: boolean;
 }
 
-export interface UnusedExportsReport {
-	unusedExports: UnusedExport[];
-	warnings: string[];
+export interface SourceAnalysis {
+	projects: Record<string, ProjectScan>;
+	entryPoints: Record<string, EntryPointResolution>;
+	/** Whether each project's tsconfig.json sets `composite` (required to be referenced). */
+	composite: Record<string, boolean>;
+	/** Exports of each shared package's entry point (only when requested). */
+	exports?: Record<string, ExportRecord[]>;
 }
+
+// Dependency graph
 
 export interface ResolvedDependency {
 	dependency: ProjectInfo;
-	entryPoint: EntryPointInfo;
-	reason: "import" | "tsconfig-reference" | "default";
+	/** Source entry point, relative to the dependency's root. */
+	entryPoint: string;
+	reason: "import" | "default";
 	sourceFiles: string[];
 }
 
 export interface ResolvedProject {
 	project: ProjectInfo;
+	/** False when the project's sources were not scanned; its files are left untouched. */
+	scanned: boolean;
 	dependencies: Record<string, ResolvedDependency>;
 }
 
 export interface Cycle {
 	path: string[];
-	projects: ProjectInfo[];
 }
 
 export interface DiamondPattern {
@@ -144,63 +167,41 @@ export interface DiamondPattern {
 	directDependency: string;
 	transitiveThrough: string[];
 	pattern: "universal-utility" | "incomplete-abstraction";
-	suggestion: string;
 }
 
 export interface ResolvedGraph {
 	projects: Record<string, ResolvedProject>;
 	cycles: Cycle[];
 	diamonds: DiamondPattern[];
-	warnings: string[];
 }
 
-export interface StaleDependencies {
-	packageJsonDeps: string[];
-	tsconfigPaths: string[];
-	tsconfigReferences: string[];
+// Emitting changes
+
+export interface ChangeEntry {
+	action: "add" | "remove" | "update";
+	description: string;
+}
+
+export interface FileChange {
+	projectId: string;
+	filePath: string;
+	changes: ChangeEntry[];
 }
 
 export interface EmitResult {
-	filesModified: number;
-	projectsUpdated: string[];
-	staleDependencies: Record<string, StaleDependencies>;
-	warnings: string[];
+	fileChanges: FileChange[];
+	skippedProjects: Array<{ projectId: string; reason: string }>;
 }
 
-export interface PackageJson {
-	name?: string;
-	version?: string;
-	type?: "module" | "commonjs";
-	private?: boolean;
-	workspaces?: string[] | { packages: string[] };
-	dependencies?: Record<string, string>;
-	devDependencies?: Record<string, string>;
-	peerDependencies?: Record<string, string>;
-	types?: string;
-	typings?: string;
-	main?: string;
-	module?: string;
-	exports?: NoFix;
-}
+// Unused exports
 
-export interface TsConfig {
-	extends?: string;
-	compilerOptions?: {
-		outDir?: string;
-		rootDir?: string;
-		paths?: Record<string, string[]>;
-		composite?: boolean;
-		incremental?: boolean;
-		[key: string]: FixMe;
-	};
-	include?: string[];
-	exclude?: string[];
-	files?: string[];
-	references?: Array<{ path: string }>;
-}
-
-export interface EntryPointInfo {
-	path: string;
-	exists: boolean;
-	isTypeDefinition: boolean;
+export interface PackageExportUsage {
+	projectId: string;
+	/** Other workspace projects that import this package. */
+	importedBy: string[];
+	/** True when some import may use every export (namespace import, `export *`, dynamic import). */
+	usedWholesale: boolean;
+	usedExports: string[];
+	unusedExports: ExportRecord[];
+	totalExports: number;
 }

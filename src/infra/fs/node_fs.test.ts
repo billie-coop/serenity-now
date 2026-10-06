@@ -15,26 +15,6 @@ describe("node file system", () => {
 		await rm(tempDir, { recursive: true, force: true });
 	});
 
-	it("reads JSON files", async () => {
-		const testPath = join(tempDir, "test.json");
-		await writeFile(testPath, JSON.stringify({ foo: "bar" }));
-		const result = await nodeFileSystem.readJson<{ foo: string }>(testPath);
-		expect(result).toEqual({ foo: "bar" });
-	});
-
-	it("throws error on invalid JSON", async () => {
-		const testPath = join(tempDir, "invalid.json");
-		await writeFile(testPath, "not valid json{");
-		await expect(nodeFileSystem.readJson(testPath)).rejects.toThrow();
-	});
-
-	it("writes JSON files", async () => {
-		const testPath = join(tempDir, "write.json");
-		await nodeFileSystem.writeJson(testPath, { test: "data" });
-		const content = await nodeFileSystem.readText(testPath);
-		expect(content).toContain('"test": "data"');
-	});
-
 	it("checks if file exists (true)", async () => {
 		const testPath = join(tempDir, "exists.txt");
 		await writeFile(testPath, "content");

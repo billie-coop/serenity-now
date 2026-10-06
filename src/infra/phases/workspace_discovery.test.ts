@@ -1,680 +1,276 @@
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { FileSystemPort } from "../../core/ports.js";
-import { createCapturingLogger } from "../../core/test-helpers.js";
-import type {
-	PackageJson,
-	RepoManagerOptions,
-	SyncConfig,
-} from "../../core/types.js";
-import { createWorkspaceDiscovery } from "./workspace_discovery.js";
+import { ConfigurationError } from "../../core/errors.js";
+import type { WorkspaceTypeConfig } from "../../core/types.js";
+import { makeConfig, ROOT } from "../../test_support/builders.js";
+import { createCapturingLogger } from "../../test_support/logger.js";
+import { createMemoryFs } from "../../test_support/memory_fs.js";
+import {
+	createWorkspaceDiscovery,
+	type PackageJsonFinder,
+	workspaceGlobs,
+} from "./workspace_discovery.js";
 
-class InMemoryFileSystem implements FileSystemPort {
-	#files = new Map<string, string>();
+const APP: WorkspaceTypeConfig = { type: "app", requiresTsconfig: true };
+const SHARED: WorkspaceTypeConfig = {
+	type: "shared-package",
+	requiresTsconfig: true,
+};
 
-	constructor(initialFiles: Record<string, string> = {}) {
-		for (const [path, contents] of Object.entries(initialFiles)) {
-			this.#files.set(path, contents);
-		}
-	}
-
-	readJson<T>(path: string): Promise<T> {
-		return Promise.resolve(JSON.parse(this.#files.get(path) ?? "{}") as T);
-	}
-
-	writeJson(): Promise<void> {
-		return Promise.resolve();
-	}
-
-	fileExists(path: string): Promise<boolean> {
-		return Promise.resolve(this.#files.has(path));
-	}
-
-	readText(path: string): Promise<string> {
-		return Promise.resolve(this.#files.get(path) ?? "");
-	}
-
-	writeText(): Promise<void> {
-		return Promise.resolve();
-	}
-}
-
-function setupRepo(files: Record<string, unknown>): InMemoryFileSystem {
-	const serialized: Record<string, string> = {};
+/** A memory fs with a root package.json plus `files` (paths relative to ROOT). */
+function repoFs(
+	files: Record<string, string | object>,
+	workspaces: unknown = ["apps/*", "packages/*"],
+) {
+	const all: Record<string, string> = {
+		[`${ROOT}/package.json`]: JSON.stringify({ name: "root", workspaces }),
+	};
 	for (const [path, contents] of Object.entries(files)) {
-		serialized[path] =
+		all[`${ROOT}/${path}`] =
 			typeof contents === "string" ? contents : JSON.stringify(contents);
 	}
-	return new InMemoryFileSystem(serialized);
+	return createMemoryFs(all);
 }
 
-const baseOptions: RepoManagerOptions = {
-	rootDir: "/repo",
-};
-
-const baseConfig: SyncConfig = {
-	workspaceTypes: {
-		"apps/*": { type: "app", subType: "website" },
-		"packages/*": { type: "shared-package" },
-	},
-};
-
-type GlobMap = Record<string, string[]>;
-
-function createStubGlob(map: GlobMap) {
-	return async function* (pattern: string) {
-		for (const path of map[pattern] ?? []) {
-			yield {
-				path,
-				name: path.split("/").pop() ?? "",
-				isFile: true,
-			};
-		}
+/** Finds every package.json in the memory fs except the root one. */
+function finderFor(fs: { files: Record<string, string> }): PackageJsonFinder & {
+	calls: Array<{ rootDir: string; include: string[]; exclude: string[] }>;
+} {
+	const calls: Array<{
+		rootDir: string;
+		include: string[];
+		exclude: string[];
+	}> = [];
+	const finder = async (
+		rootDir: string,
+		include: string[],
+		exclude: string[],
+	) => {
+		calls.push({ rootDir, include, exclude });
+		return Object.keys(fs.files)
+			.filter(
+				(p) => p.endsWith("/package.json") && p !== `${ROOT}/package.json`,
+			)
+			.map((p) => p.slice(ROOT.length + 1));
 	};
+	return Object.assign(finder, { calls });
 }
 
-function workspaceGlobPattern(pattern: string): string {
-	const searchPattern = pattern.includes("*") ? pattern : `${pattern}/*`;
-	return join(baseOptions.rootDir, searchPattern, "package.json");
+async function discover(
+	fs: ReturnType<typeof createMemoryFs>,
+	config = makeConfig(),
+	logger = createCapturingLogger(),
+) {
+	return createWorkspaceDiscovery(finderFor(fs)).discover(
+		config,
+		{ rootDir: ROOT },
+		logger,
+		fs,
+	);
 }
+
+async function problemsOf(
+	fs: ReturnType<typeof createMemoryFs>,
+	config = makeConfig(),
+): Promise<string[]> {
+	const error = await discover(fs, config).catch((e: unknown) => e);
+	expect(error).toBeInstanceOf(ConfigurationError);
+	return (error as ConfigurationError).problems;
+}
+
+describe("workspaceGlobs", () => {
+	it("maps each pattern to its package.json and negations to excludes", () => {
+		expect(
+			workspaceGlobs(["apps/*", "packages/**", "!packages/legacy"]),
+		).toEqual({
+			include: ["apps/*/package.json", "packages/**/package.json"],
+			exclude: ["packages/legacy/package.json"],
+		});
+	});
+
+	it("treats a plain path as the package directory itself", () => {
+		expect(workspaceGlobs(["tools/cli"])).toEqual({
+			include: ["tools/cli/package.json"],
+			exclude: [],
+		});
+	});
+
+	it("reads the object form", () => {
+		expect(workspaceGlobs({ packages: ["libs/*"] })).toEqual({
+			include: ["libs/*/package.json"],
+			exclude: [],
+		});
+		expect(workspaceGlobs({})).toEqual({ include: [], exclude: [] });
+		expect(workspaceGlobs(undefined)).toEqual({ include: [], exclude: [] });
+	});
+});
 
 describe("workspace discovery", () => {
-	it("finds projects matching config", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: ["apps/*", "packages/*"],
-			} satisfies PackageJson,
-			"/repo/apps/web/package.json": {
-				name: "@repo/webapp",
-				private: true,
-			} satisfies PackageJson,
-			"/repo/apps/web/tsconfig.json": "{}",
-			"/repo/packages/lib/package.json": {
-				name: "@repo/lib",
-			} satisfies PackageJson,
-			"/repo/packages/lib/tsconfig.json": "{}",
+	it("builds project info for matching projects", async () => {
+		const fs = repoFs({
+			"apps/web/package.json": { name: "web", private: true },
+			"apps/web/tsconfig.json": "{}",
+			"packages/ui/package.json": { name: "@acme/ui" },
+			"packages/ui/tsconfig.json": "{}",
 		});
 		const logger = createCapturingLogger();
-		const globber = createStubGlob({
-			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
-			[workspaceGlobPattern("packages/*")]: ["/repo/packages/lib/package.json"],
-		});
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const inventory = await discovery.discover(
-			baseConfig,
-			baseOptions,
-			logger,
-			fs,
-		);
-
-		expect(Object.keys(inventory.projects)).toHaveLength(2);
-		const webProject = inventory.projects["@repo/webapp"];
-		const libProject = inventory.projects["@repo/lib"];
-		expect(webProject).toBeDefined();
-		expect(libProject).toBeDefined();
-		expect(webProject?.workspaceType).toBe("app");
-		expect(libProject?.workspaceType).toBe("shared-package");
-		expect(inventory.warnings).toHaveLength(0);
-	});
-
-	it("warns about missing tsconfig and unmatched projects", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: ["apps/*"],
-			} satisfies PackageJson,
-			"/repo/apps/app1/package.json": {
-				name: "@repo/app1",
-			} satisfies PackageJson,
-			"/repo/apps/app1/tsconfig.json": "{}",
-			"/repo/apps/no-config/package.json": {
-				name: "@repo/no-config",
-			} satisfies PackageJson,
-		});
-		const logger = createCapturingLogger();
-		const globber = createStubGlob({
-			[workspaceGlobPattern("apps/*")]: [
-				"/repo/apps/app1/package.json",
-				"/repo/apps/no-config/package.json",
-			],
-		});
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const customConfig: SyncConfig = {
-			workspaceTypes: {
-				"apps/app1": { type: "app", subType: "website" },
-			},
-		};
-
-		const inventory = await discovery.discover(
-			customConfig,
-			baseOptions,
-			logger,
-			fs,
-		);
-
-		expect(Object.keys(inventory.projects)).toHaveLength(1);
-		expect(inventory.warnings.some((w) => w.includes("missing tsconfig"))).toBe(
-			true,
-		);
-		expect(
-			inventory.warnings.some((w) =>
-				w.includes("does not match any configured workspace type"),
-			),
-		).toBe(true);
-	});
-
-	it("throws when root package.json missing", async () => {
-		const fs = new InMemoryFileSystem();
-		const logger = createCapturingLogger();
-		const discovery = createWorkspaceDiscovery(createStubGlob({}));
-		await expect(() =>
-			discovery.discover(baseConfig, baseOptions, logger, fs),
-		).rejects.toThrow("No package.json found");
-	});
-
-	it("handles workspaces.packages format", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: {
-					packages: ["apps/*", "packages/*"],
+		const finder = finderFor(fs);
+		const inventory = await createWorkspaceDiscovery(finder).discover(
+			makeConfig({
+				workspaceTypes: {
+					"apps/*": { ...APP, subType: "website" },
+					"packages/*": SHARED,
 				},
-			} satisfies { workspaces: { packages: string[] } },
-			"/repo/apps/web/package.json": {
-				name: "@repo/webapp",
-			} satisfies PackageJson,
-			"/repo/apps/web/tsconfig.json": "{}",
-		});
-		const logger = createCapturingLogger();
-		const globber = createStubGlob({
-			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
-			[workspaceGlobPattern("packages/*")]: [],
-		});
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const inventory = await discovery.discover(
-			baseConfig,
-			baseOptions,
-			logger,
-			fs,
-		);
-
-		expect(Object.keys(inventory.projects)).toHaveLength(1);
-		expect(inventory.projects["@repo/webapp"]).toBeDefined();
-	});
-
-	it("handles null workspaces gracefully", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				name: "root",
-				workspaces: null,
-			} satisfies { name: string; workspaces: null },
-		});
-		const logger = createCapturingLogger();
-		const discovery = createWorkspaceDiscovery(createStubGlob({}));
-
-		const inventory = await discovery.discover(
-			baseConfig,
-			baseOptions,
-			logger,
-			fs,
-		);
-
-		expect(Object.keys(inventory.projects)).toHaveLength(0);
-		expect(
-			logger.warnings.some((w) => w.includes("No workspaces configured")),
-		).toBe(true);
-	});
-
-	it("handles undefined workspaces", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				name: "root",
-			} satisfies PackageJson,
-		});
-		const logger = createCapturingLogger();
-		const discovery = createWorkspaceDiscovery(createStubGlob({}));
-
-		const inventory = await discovery.discover(
-			baseConfig,
-			baseOptions,
-			logger,
-			fs,
-		);
-
-		expect(Object.keys(inventory.projects)).toHaveLength(0);
-		expect(
-			logger.warnings.some((w) => w.includes("No workspaces configured")),
-		).toBe(true);
-	});
-
-	it("skips projects in ignoreProjects config", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: ["apps/*"],
-			} satisfies PackageJson,
-			"/repo/apps/app1/package.json": {
-				name: "@repo/app1",
-			} satisfies PackageJson,
-			"/repo/apps/app1/tsconfig.json": "{}",
-			"/repo/apps/ignored/package.json": {
-				name: "@repo/ignored",
-			} satisfies PackageJson,
-			"/repo/apps/ignored/tsconfig.json": "{}",
-		});
-		const logger = createCapturingLogger();
-		const globber = createStubGlob({
-			[workspaceGlobPattern("apps/*")]: [
-				"/repo/apps/app1/package.json",
-				"/repo/apps/ignored/package.json",
-			],
-		});
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const configWithIgnore: SyncConfig = {
-			...baseConfig,
-			ignoreProjects: ["@repo/ignored"],
-		};
-
-		const inventory = await discovery.discover(
-			configWithIgnore,
-			baseOptions,
-			logger,
-			fs,
-		);
-
-		expect(Object.keys(inventory.projects)).toHaveLength(1);
-		expect(inventory.projects["@repo/app1"]).toBeDefined();
-		expect(inventory.projects["@repo/ignored"]).toBeUndefined();
-	});
-
-	it("warns about missing package name", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: ["apps/*"],
-			} satisfies PackageJson,
-			"/repo/apps/no-name/package.json": {
-				version: "1.0.0",
-			} satisfies { version: string },
-		});
-		const logger = createCapturingLogger();
-		const globber = createStubGlob({
-			[workspaceGlobPattern("apps/*")]: ["/repo/apps/no-name/package.json"],
-		});
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const inventory = await discovery.discover(
-			baseConfig,
-			baseOptions,
-			logger,
-			fs,
-		);
-
-		expect(Object.keys(inventory.projects)).toHaveLength(0);
-		expect(
-			inventory.warnings.some(
-				(w) =>
-					w.includes("Skipping project") && w.includes("missing package name"),
-			),
-		).toBe(true);
-	});
-
-	it("skips non-file entries from glob", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: ["apps/*"],
-			} satisfies PackageJson,
-			"/repo/apps/web/package.json": {
-				name: "@repo/web",
-			} satisfies PackageJson,
-			"/repo/apps/web/tsconfig.json": "{}",
-		});
-		const logger = createCapturingLogger();
-		const globber = async function* (_pattern: string) {
-			yield {
-				path: "/repo/apps/web/package.json",
-				name: "package.json",
-				isFile: true,
-			};
-			yield {
-				path: "/repo/apps/directory",
-				name: "directory",
-				isFile: false,
-			};
-			yield {
-				path: "/repo/apps/web/tsconfig.json",
-				name: "tsconfig.json",
-				isFile: true,
-			};
-		};
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const inventory = await discovery.discover(
-			baseConfig,
-			baseOptions,
-			logger,
-			fs,
-		);
-
-		expect(Object.keys(inventory.projects)).toHaveLength(1);
-		expect(inventory.projects["@repo/web"]).toBeDefined();
-	});
-
-	it("skips paths outside repo root", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: ["apps/*"],
-			} satisfies PackageJson,
-			"/repo/apps/web/package.json": {
-				name: "@repo/web",
-			} satisfies PackageJson,
-			"/repo/apps/web/tsconfig.json": "{}",
-		});
-		const logger = createCapturingLogger();
-		const globber = async function* (_pattern: string) {
-			yield {
-				path: "/repo/apps/web/package.json",
-				name: "package.json",
-				isFile: true,
-			};
-			yield {
-				path: "/outside/package.json",
-				name: "package.json",
-				isFile: true,
-			};
-		};
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const inventory = await discovery.discover(
-			baseConfig,
-			baseOptions,
-			logger,
-			fs,
-		);
-
-		expect(Object.keys(inventory.projects)).toHaveLength(1);
-		expect(inventory.projects["@repo/web"]).toBeDefined();
-	});
-
-	it("handles non-glob workspace patterns", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: ["specific-app"],
-			} satisfies PackageJson,
-			"/repo/specific-app/web/package.json": {
-				name: "@repo/web",
-			} satisfies PackageJson,
-			"/repo/specific-app/web/tsconfig.json": "{}",
-		});
-		const logger = createCapturingLogger();
-		const globber = createStubGlob({
-			[join(baseOptions.rootDir, "specific-app/*", "package.json")]: [
-				"/repo/specific-app/web/package.json",
-			],
-		});
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const customConfig: SyncConfig = {
-			workspaceTypes: {
-				"specific-app/web": { type: "app", subType: "website" },
-			},
-		};
-
-		const inventory = await discovery.discover(
-			customConfig,
-			baseOptions,
-			logger,
-			fs,
-		);
-
-		expect(Object.keys(inventory.projects)).toHaveLength(1);
-		expect(inventory.projects["@repo/web"]).toBeDefined();
-	});
-
-	it("handles projects without workspace type config", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: ["apps/*"],
-			} satisfies PackageJson,
-			"/repo/apps/web/package.json": {
-				name: "@repo/web",
-			} satisfies PackageJson,
-			"/repo/apps/web/tsconfig.json": "{}",
-		});
-		const logger = createCapturingLogger();
-		const globber = createStubGlob({
-			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
-		});
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const emptyConfig: SyncConfig = {};
-
-		const inventory = await discovery.discover(
-			emptyConfig,
-			baseOptions,
-			logger,
-			fs,
-		);
-
-		expect(
-			inventory.warnings.some((w) =>
-				w.includes("does not match any configured workspace type"),
-			),
-		).toBe(true);
-	});
-
-	it("validates name prefix when configured", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: ["apps/*"],
-			} satisfies PackageJson,
-			"/repo/apps/web/package.json": {
-				name: "wrong-prefix",
-			} satisfies PackageJson,
-			"/repo/apps/web/tsconfig.json": "{}",
-		});
-		const logger = createCapturingLogger();
-		const globber = createStubGlob({
-			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
-		});
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const configWithPrefix: SyncConfig = {
-			workspaceTypes: {
-				"apps/*": { type: "app", enforceNamePrefix: "@repo/" },
-			},
-		};
-
-		const inventory = await discovery.discover(
-			configWithPrefix,
-			baseOptions,
-			logger,
-			fs,
-		);
-
-		expect(
-			inventory.warnings.some((w) => w.includes('should start with "@repo/"')),
-		).toBe(true);
-	});
-
-	it("handles missing package.json gracefully", async () => {
-		class FailingFileSystem extends InMemoryFileSystem {
-			override async readJson<T>(path: string): Promise<T> {
-				if (path === "/repo/apps/failing/package.json") {
-					throw new Error("Read error");
-				}
-				return super.readJson(path);
-			}
-		}
-
-		const fs = new FailingFileSystem({
-			"/repo/package.json": JSON.stringify({
-				workspaces: ["apps/*"],
 			}),
-			"/repo/apps/good/package.json": JSON.stringify({
-				name: "@repo/good",
-			}),
-			"/repo/apps/good/tsconfig.json": "{}",
-		});
-
-		const logger = createCapturingLogger();
-		const globber = createStubGlob({
-			[workspaceGlobPattern("apps/*")]: [
-				"/repo/apps/good/package.json",
-				"/repo/apps/failing/package.json",
-			],
-		});
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const inventory = await discovery.discover(
-			baseConfig,
-			baseOptions,
+			{ rootDir: ROOT },
 			logger,
 			fs,
 		);
 
-		expect(Object.keys(inventory.projects)).toHaveLength(1);
-		expect(inventory.projects["@repo/good"]).toBeDefined();
-	});
-
-	it("handles projects with requiresTsconfig set to false", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: ["apps/*"],
-			} satisfies PackageJson,
-			"/repo/apps/web/package.json": {
-				name: "@repo/web",
-			} satisfies PackageJson,
-		});
-		const logger = createCapturingLogger();
-		const globber = createStubGlob({
-			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
-		});
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const configNoTsconfig: SyncConfig = {
-			workspaceTypes: {
-				"apps/*": { type: "app", requiresTsconfig: false },
+		expect(finder.calls).toEqual([
+			{
+				rootDir: ROOT,
+				include: ["apps/*/package.json", "packages/*/package.json"],
+				exclude: [],
 			},
-		};
-
-		const inventory = await discovery.discover(
-			configNoTsconfig,
-			baseOptions,
-			logger,
-			fs,
+		]);
+		expect(Object.keys(inventory.projects)).toEqual(["web", "@acme/ui"]);
+		expect(inventory.projects.web).toEqual({
+			id: "web",
+			root: `${ROOT}/apps/web`,
+			relativeRoot: "apps/web",
+			packageJson: { name: "web", private: true },
+			tsconfigPath: `${ROOT}/apps/web/tsconfig.json`,
+			workspaceType: "app",
+			workspaceSubType: "website",
+			workspaceConfig: { ...APP, subType: "website" },
+			isPrivate: true,
+		});
+		expect(inventory.projects["@acme/ui"]?.workspaceType).toBe(
+			"shared-package",
 		);
-
-		expect(Object.keys(inventory.projects)).toHaveLength(1);
-		expect(inventory.warnings.some((w) => w.includes("missing tsconfig"))).toBe(
-			false,
-		);
+		expect(inventory.projects["@acme/ui"]?.isPrivate).toBe(false);
+		expect(logger.messages.info).toEqual(["→ Found 2 projects"]);
 	});
 
-	it("uses default globber when none provided", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: ["apps/*"],
-			} satisfies PackageJson,
+	it("allows a missing tsconfig when requiresTsconfig is false", async () => {
+		const fs = repoFs({ "apps/docs/package.json": { name: "docs" } });
+		const inventory = await discover(
+			fs,
+			makeConfig({
+				workspaceTypes: { "apps/*": { ...APP, requiresTsconfig: false } },
+			}),
+		);
+		expect(inventory.projects.docs?.tsconfigPath).toBeUndefined();
+	});
+
+	it("skips ignored projects before validating them", async () => {
+		const fs = repoFs({
+			"apps/web/package.json": { name: "web" },
+			"apps/web/tsconfig.json": "{}",
+			"legacy/old/package.json": { name: "old" },
 		});
 		const logger = createCapturingLogger();
-		const discovery = createWorkspaceDiscovery();
-
-		const inventory = await discovery.discover(
-			baseConfig,
-			baseOptions,
-			logger,
+		const inventory = await discover(
 			fs,
+			makeConfig({ ignoreProjects: ["old"] }),
+			logger,
 		);
-
-		// With default globber and in-memory FS, no projects will be found
-		// This test ensures the default globber is created without error
-		expect(inventory.projects).toBeDefined();
+		expect(Object.keys(inventory.projects)).toEqual(["web"]);
+		expect(logger.messages.debug).toEqual(["Ignoring project old"]);
 	});
 
-	it("handles negated workspace patterns", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: {
-					packages: ["apps/*", "!apps/excluded"],
+	it("fails when the root has no package.json", async () => {
+		await expect(discover(createMemoryFs())).rejects.toThrow(
+			`No package.json found in ${ROOT}`,
+		);
+	});
+
+	it("fails when no workspaces are configured", async () => {
+		const noWorkspaces = createMemoryFs({
+			[`${ROOT}/package.json`]: JSON.stringify({ name: "root" }),
+		});
+		await expect(discover(noWorkspaces)).rejects.toThrow(
+			`No "workspaces" configured in ${ROOT}/package.json`,
+		);
+		await expect(discover(repoFs({}, ["!apps/x"]))).rejects.toThrow(
+			ConfigurationError,
+		);
+	});
+
+	it("reports every problem at once", async () => {
+		const fs = repoFs({
+			"apps/nameless/package.json": { version: "1.0.0" },
+			"apps/broken/package.json": "{ not json",
+			"apps/one/package.json": { name: "dupe" },
+			"apps/one/tsconfig.json": "{}",
+			"apps/two/package.json": { name: "dupe" },
+			"apps/two/tsconfig.json": "{}",
+			"tools/stray/package.json": { name: "stray" },
+			"apps/notsc/package.json": { name: "notsc" },
+		});
+		const problems = await problemsOf(fs);
+		expect(problems).toHaveLength(5);
+		expect(problems).toEqual(
+			expect.arrayContaining([
+				expect.stringContaining(
+					`${ROOT}/apps/broken/package.json:1:3: invalid JSON`,
+				),
+				'apps/nameless/package.json has no "name"',
+				'Package name "dupe" is used by both apps/one and apps/two',
+				expect.stringMatching(
+					/^stray \(tools\/stray\) doesn't match any "workspaceTypes" pattern/,
+				),
+				expect.stringMatching(/^notsc \(apps\/notsc\) has no tsconfig\.json/),
+			]),
+		);
+	});
+
+	it("uses the first matching pattern in config order", async () => {
+		const fs = repoFs({
+			"apps/web/package.json": { name: "web" },
+			"apps/web/tsconfig.json": "{}",
+			"apps/api/package.json": { name: "api" },
+			"apps/api/tsconfig.json": "{}",
+		});
+		const inventory = await discover(
+			fs,
+			makeConfig({ workspaceTypes: { "apps/web": SHARED, "apps/*": APP } }),
+		);
+		expect(inventory.projects.web?.workspaceType).toBe("shared-package");
+		expect(inventory.projects.api?.workspaceType).toBe("app");
+
+		const reversed = await discover(
+			fs,
+			makeConfig({ workspaceTypes: { "apps/*": APP, "apps/web": SHARED } }),
+		);
+		expect(reversed.projects.web?.workspaceType).toBe("app");
+	});
+
+	it("enforces the configured name prefix", async () => {
+		const fs = repoFs({
+			"packages/ui/package.json": { name: "ui" },
+			"packages/ui/tsconfig.json": "{}",
+			"packages/ok/package.json": { name: "@acme/ok" },
+			"packages/ok/tsconfig.json": "{}",
+		});
+		const problems = await problemsOf(
+			fs,
+			makeConfig({
+				workspaceTypes: {
+					"packages/*": { ...SHARED, enforceNamePrefix: "@acme/" },
 				},
-			} satisfies { workspaces: { packages: string[] } },
-			"/repo/apps/web/package.json": {
-				name: "@repo/web",
-			} satisfies PackageJson,
-			"/repo/apps/web/tsconfig.json": "{}",
-		});
-		const logger = createCapturingLogger();
-		const globber = createStubGlob({
-			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
-		});
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const inventory = await discovery.discover(
-			baseConfig,
-			baseOptions,
-			logger,
-			fs,
+			}),
 		);
-
-		expect(Object.keys(inventory.projects)).toHaveLength(1);
-		expect(inventory.projects["@repo/web"]).toBeDefined();
+		expect(problems).toEqual([
+			'ui (packages/ui) must be named with the prefix "@acme/"',
+		]);
 	});
 
-	it("warns when project is missing tsconfig and requiresTsconfig is true", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: ["apps/*"],
-			} satisfies PackageJson,
-			"/repo/apps/web/package.json": {
-				name: "@repo/web",
-			} satisfies PackageJson,
-		});
-		const logger = createCapturingLogger();
-		const globber = createStubGlob({
-			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
-		});
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const inventory = await discovery.discover(
-			baseConfig,
-			baseOptions,
-			logger,
-			fs,
-		);
-
-		expect(
-			inventory.warnings.some(
-				(w) => w.includes("@repo/web") && w.includes("missing tsconfig"),
-			),
-		).toBe(true);
-	});
-
-	it("throws on invalid workspace type", async () => {
-		const fs = setupRepo({
-			"/repo/package.json": {
-				workspaces: ["apps/*"],
-			} satisfies PackageJson,
-			"/repo/apps/web/package.json": {
-				name: "@repo/web",
-			} satisfies PackageJson,
-			"/repo/apps/web/tsconfig.json": "{}",
-		});
-		const logger = createCapturingLogger();
-		const globber = createStubGlob({
-			[workspaceGlobPattern("apps/*")]: ["/repo/apps/web/package.json"],
-		});
-		const discovery = createWorkspaceDiscovery(globber);
-
-		const invalidConfig: SyncConfig = {
-			workspaceTypes: {
-				// biome-ignore lint/suspicious/noExplicitAny: testing invalid type handling
-				"apps/*": { type: "invalid-type" as any },
-			},
-		};
-
-		await expect(() =>
-			discovery.discover(invalidConfig, baseOptions, logger, fs),
-		).rejects.toThrow("Invalid workspace type");
+	it("rejects a package.json that isn't an object", async () => {
+		const fs = repoFs({ "apps/arr/package.json": "[]" });
+		const problems = await problemsOf(fs);
+		expect(problems).toEqual([
+			`${ROOT}/apps/arr/package.json must contain a JSON object`,
+		]);
 	});
 });
