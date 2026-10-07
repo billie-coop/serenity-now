@@ -5,9 +5,7 @@
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"bin": {
-		"serenity-now": "./dist/cli.js"
-	},
+	"bin": "./dist/cli.js",
 	"files": [
 		"dist"
 	],
@@ -17,15 +15,19 @@
 			"import": "./dist/index.js"
 		}
 	},
+	"workspaces": [
+		"website"
+	],
 	"scripts": {
 		"build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
-		"dev": "tsx src/cli.ts",
+		"cli": "tsx src/cli.ts",
+		"dev": "yarn workspace serenity-now-website dev",
 		"test": "vitest --coverage",
 		"format": "biome format --write .",
 		"lint": "biome lint .",
 		"check": "biome check --write . && tsc",
 		"typecheck": "tsc",
-		"prepublishOnly": "npm run check && vitest run && npm run build"
+		"prepublishOnly": "yarn check && vitest run && yarn build"
 	},
 	"keywords": [
 		"monorepo",
@@ -48,8 +50,9 @@
 	"engines": {
 		"node": ">=22.12.0"
 	},
-	"overrides": {
-		"picomatch": "$picomatch"
+	"packageManager": "yarn@4.18.0",
+	"resolutions": {
+		"picomatch": "4.0.7"
 	},
 	"dependencies": {
 		"jsonc-parser": "3.3.1",
@@ -63,6 +66,7 @@
 		"@types/picomatch": "4.0.3",
 		"@vitest/coverage-v8": "5.0.3",
 		"tsx": "4.23.15",
+		"vite": "8.3.1",
 		"vitest": "5.0.3"
 	}
 }

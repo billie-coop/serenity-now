@@ -365,11 +365,15 @@ _"These dependencies are real... and they're spectacular."_
 
 serenity-now was extracted from the [billie-coop](https://github.com/billie-coop) production monorepo. Bug reports and feature requests are welcome in [issues](https://github.com/billie-coop/serenity-now/issues).
 
+The repo uses yarn 4 (pinned in `package.json`; `corepack enable` picks it up).
+
 ```bash
-npm install
-npm test            # vitest
-npm run check       # biome + tsc
-npm run build
+yarn install
+yarn test           # vitest
+yarn check          # biome + tsc
+yarn build          # compile the CLI to dist/
+yarn cli --help     # run the CLI from source
+yarn dev            # run the docs site locally
 ```
 
 [`docs/architecture.md`](https://github.com/billie-coop/serenity-now/blob/main/docs/architecture.md) maps the code. The docs site lives in [`website/`](https://github.com/billie-coop/serenity-now/tree/main/website) and renders this README.

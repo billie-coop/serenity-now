@@ -50,14 +50,18 @@ jobs:
           git merge main --no-edit
           git push
 
+      # Corepack provides the yarn version pinned in package.json's packageManager
+      - name: Enable corepack
+        run: corepack enable
+
       - name: Install dependencies
-        run: npm ci
+        run: yarn install --immutable
 
       - name: Run checks
-        run: npm run check
+        run: yarn check
 
       - name: Run tests
-        run: npm test
+        run: yarn test
 
       - name: Bump version
         id: version
@@ -92,14 +96,14 @@ jobs:
           echo "Bumping version from $CURRENT_VERSION to $NEW_VERSION"
 
           # Update package.json
-          npm version $NEW_VERSION --no-git-tag-version
+          yarn version "$NEW_VERSION"
 
           # Commit version bump
-          git add package.json package-lock.json
+          git add package.json
           git commit -m "chore: bump version to $NEW_VERSION"
 
       - name: Build
-        run: npm run build
+        run: yarn build
 
       - name: Create git tag
         run: |
