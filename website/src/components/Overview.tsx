@@ -50,10 +50,6 @@ function Hero() {
 						Read the docs →
 					</a>
 				</div>
-				<p className="mt-6 text-sm text-gray-500 dark:text-gray-400">
-					A command-line tool: nothing to import, nothing to set up beyond one
-					config file. Works with npm, yarn and bun workspaces on Node 22.12+.
-				</p>
 			</div>
 			<Terminal />
 		</section>
@@ -62,27 +58,21 @@ function Hero() {
 
 const THREE_FILES = [
 	{
-		title: "Your imports",
 		file: "apps/mobile/src/index.ts",
 		code: `import { formatDate } from "@example/utils";`,
-		note: "The source of truth, read with the TypeScript 7 compiler.",
 	},
 	{
-		title: "package.json",
 		file: "apps/mobile/package.json",
 		code: `"dependencies": {
   "@example/utils": "workspace:*"
 }`,
-		note: "So your package manager links what you use.",
 	},
 	{
-		title: "tsconfig.json",
 		file: "apps/mobile/tsconfig.json",
 		code: `"paths": {
   "@example/utils": ["../../packages/utils/src/index.ts"]
 },
 "references": [{ "path": "../../packages/utils" }]`,
-		note: "So tsc --build builds in order, incrementally.",
 	},
 ];
 
@@ -93,31 +83,20 @@ function ThreeFiles() {
 				Three files that have to agree
 			</h2>
 			<p className="mt-2 max-w-3xl text-gray-600 dark:text-gray-300">
-				Every import of another workspace package needs a matching dependency
-				and a matching project reference. They drift apart every time an import
-				is added, moved or deleted. serenity-now rewrites the last two to match
-				the first.
+				serenity-now reads the import and rewrites the other two to match.
 			</p>
 			<div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
 				{THREE_FILES.map((f) => (
 					<div
-						key={f.title}
-						className="flex flex-col rounded-lg border border-gray-200 dark:border-gray-800"
+						key={f.file}
+						className="flex flex-col overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800"
 					>
-						<div className="border-b border-gray-200 px-4 py-2.5 dark:border-gray-800">
-							<p className="font-semibold text-gray-900 dark:text-white">
-								{f.title}
-							</p>
-							<p className="font-mono text-xs text-gray-500 dark:text-gray-400">
-								{f.file}
-							</p>
-						</div>
+						<p className="border-b border-gray-200 px-4 py-2.5 font-mono text-xs text-gray-600 dark:border-gray-800 dark:text-gray-300">
+							{f.file}
+						</p>
 						<pre className="flex-1 overflow-x-auto bg-gray-950 px-4 py-3 font-mono text-xs leading-relaxed text-gray-100">
 							{f.code}
 						</pre>
-						<p className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">
-							{f.note}
-						</p>
 					</div>
 				))}
 			</div>
