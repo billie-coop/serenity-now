@@ -19,14 +19,21 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      # Corepack provides the yarn version pinned in package.json's packageManager
+      - name: Enable corepack
+        run: corepack enable
+
       - name: Install dependencies
-        run: npm ci
+        run: yarn install --immutable
 
       - name: Lint and typecheck
-        run: npx biome ci . && npx tsc
+        run: yarn biome ci . && yarn tsc
 
       - name: Run tests
-        run: npx vitest run
+        run: yarn vitest run
 
       - name: Build
-        run: npm run build
+        run: yarn build
+
+      - name: Typecheck and build docs site
+        run: yarn workspace serenity-now-website build

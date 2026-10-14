@@ -3,7 +3,7 @@ export const DEFAULT_CONFIG_FILENAME = "serenity-now.config.jsonc";
 /** Written to the repo root the first time serenity-now runs without a config. */
 export const CONFIG_TEMPLATE = `{
 	// Serenity Now configuration
-	// https://github.com/billie-coop/serenity-now/blob/main/docs/configuration.md
+	// https://billie-coop.github.io/serenity-now/#reference/configuration
 
 	// Every workspace project must match a pattern; the first match wins.
 	"workspaceTypes": {
