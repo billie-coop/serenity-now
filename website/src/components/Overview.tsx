@@ -42,7 +42,7 @@ function Hero() {
 					your code actually uses.
 				</p>
 				<div className="mt-6 flex flex-wrap items-center gap-3">
-					<CopyCommand command="npx serenity-now" />
+					<CopyCommand command={`npx ${DOCS.npmPackage}`} />
 					<a
 						href="#reference"
 						className="rounded-md px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-gray-800"
@@ -117,7 +117,8 @@ function Commands() {
 						className="rounded-lg border border-gray-200 p-4 dark:border-gray-800"
 					>
 						<code className="font-mono text-sm font-semibold text-teal-700 dark:text-teal-300">
-							npx serenity-now{c.name === "sync" ? "" : ` ${c.name}`}
+							npx {DOCS.npmPackage}
+							{c.name === "sync" ? "" : ` ${c.name}`}
 						</code>
 						<p className="mt-1.5 text-sm text-gray-600 dark:text-gray-300">
 							{c.description}

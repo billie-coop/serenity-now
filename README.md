@@ -1,12 +1,12 @@
 # serenity-now
 
-[![npm](https://img.shields.io/npm/v/serenity-now?label=npm)](https://www.npmjs.com/package/serenity-now)
+[![npm](https://img.shields.io/npm/v/@billie-coop/serenity-now?label=npm)](https://www.npmjs.com/package/@billie-coop/serenity-now)
 [![CI](https://github.com/billie-coop/serenity-now/actions/workflows/ci.yml/badge.svg)](https://github.com/billie-coop/serenity-now/actions/workflows/ci.yml)
 
 Keeps your TypeScript monorepo's workspace dependencies, tsconfig `paths` and project `references` in sync with the imports your code actually uses.
 
 ```bash
-npx serenity-now
+npx @billie-coop/serenity-now
 ```
 
 <p align="center">
@@ -34,7 +34,7 @@ It isn't a build tool (use Nx, Turborepo or Moon for task running and caching), 
 1. **Generate a config.** From the monorepo root:
 
    ```bash
-   npx serenity-now
+   npx @billie-coop/serenity-now
    ```
 
    With no config yet, this writes a commented `serenity-now.config.jsonc` template and exits.
@@ -55,15 +55,17 @@ It isn't a build tool (use Nx, Turborepo or Moon for task running and caching), 
 3. **Preview, then sync:**
 
    ```bash
-   npx serenity-now --dry-run   # show what would change
-   npx serenity-now             # write it
+   npx @billie-coop/serenity-now --dry-run   # show what would change
+   npx @billie-coop/serenity-now             # write it
    ```
 
 4. **Pin it** so your team and CI run the same version:
 
    ```bash
-   npm install --save-dev serenity-now
+   npm install --save-dev @billie-coop/serenity-now
    ```
+
+   It installs the `serenity-now` command. Versions up to 0.3.1 were published as `serenity-now`, which is deprecated; switch to `@billie-coop/serenity-now`.
 
    ```json
    {
@@ -79,7 +81,7 @@ It isn't a build tool (use Nx, Turborepo or Moon for task running and caching), 
 Add an import of `@example/utils` to the mobile app, and serenity-now adds the dependency, the `paths` entries and the project reference:
 
 ```text
-$ npx serenity-now --dry-run
+$ npx @billie-coop/serenity-now --dry-run
 ...
 ═══ Checking Files ═══
 → 2 file(s) need updating
@@ -114,6 +116,8 @@ Everything else is left alone: third-party dependencies, `devDependencies` and `
 
 ## Commands
 
+With the package installed, the command is `serenity-now`. Without installing, run `npx @billie-coop/serenity-now` instead.
+
 ```bash
 serenity-now                         # sync package.json and tsconfig.json files
 serenity-now --dry-run               # preview changes without writing anything
@@ -139,7 +143,7 @@ Exit codes: `0` on success, `1` for errors (config, tsconfig or workspace proble
 
 ```yaml
 - name: Check workspace dependencies are in sync
-  run: npx serenity-now --check
+  run: npx @billie-coop/serenity-now --check
 ```
 
 `--check` fails when any `package.json` or `tsconfig.json` would change, whether a dependency is missing or stale.

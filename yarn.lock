@@ -47,6 +47,26 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@billie-coop/serenity-now@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "@billie-coop/serenity-now@workspace:."
+  dependencies:
+    "@biomejs/biome": "npm:2.4.14"
+    "@types/node": "npm:24.12.3"
+    "@types/picomatch": "npm:4.0.3"
+    "@vitest/coverage-v8": "npm:5.0.3"
+    jsonc-parser: "npm:3.3.1"
+    picomatch: "npm:4.0.7"
+    tinyglobby: "npm:0.2.17"
+    tsx: "npm:4.23.15"
+    typescript: "npm:7.0.2"
+    vite: "npm:8.3.1"
+    vitest: "npm:5.0.3"
+  bin:
+    serenity-now: ./dist/cli.js
+  languageName: unknown
+  linkType: soft
+
 "@biomejs/biome@npm:2.4.14":
   version: 2.4.14
   resolution: "@biomejs/biome@npm:2.4.14"
@@ -1756,26 +1776,6 @@ __metadata:
     tailwindcss: "npm:4.3.3"
     typescript: "npm:7.0.2"
     vite: "npm:8.3.1"
-  languageName: unknown
-  linkType: soft
-
-"serenity-now@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "serenity-now@workspace:."
-  dependencies:
-    "@biomejs/biome": "npm:2.4.14"
-    "@types/node": "npm:24.12.3"
-    "@types/picomatch": "npm:4.0.3"
-    "@vitest/coverage-v8": "npm:5.0.3"
-    jsonc-parser: "npm:3.3.1"
-    picomatch: "npm:4.0.7"
-    tinyglobby: "npm:0.2.17"
-    tsx: "npm:4.23.15"
-    typescript: "npm:7.0.2"
-    vite: "npm:8.3.1"
-    vitest: "npm:5.0.3"
-  bin:
-    serenity-now: ./dist/cli.js
   languageName: unknown
   linkType: soft
 

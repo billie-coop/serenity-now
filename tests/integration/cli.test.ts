@@ -469,6 +469,7 @@ describe("configuration and usage errors", () => {
 		expect(code).toBe(0);
 		expect(output).toContain("Usage:");
 		expect(output).toContain("detect-unused-exports");
+		expect(output).toContain("npx @billie-coop/serenity-now");
 	});
 
 	test("a missing config file is created from the template", async () => {

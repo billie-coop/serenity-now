@@ -1,0 +1,63 @@
+# Publishing: decisions and steps
+
+How serenity-now is published, and the record of its move to the `@billie-coop` npm scope.
+Update this file as things are decided or done.
+
+## Decided
+
+- **The npm package is `@billie-coop/serenity-now`** (decided by Stephen 2026-11-03, same as
+  `@billie-coop/hereabouts` and `@billie-coop/seaq`). Versions up to 0.3.1 were published as
+  the unscoped `serenity-now`, owned by Stephen's personal npm account. That name is
+  deprecated with a pointer, not unpublished.
+- **The command stays `serenity-now`.** `bin` is a string, so npm names the command after
+  the package without its scope; with one bin entry, `npx @billie-coop/serenity-now` runs it.
+  (A `{ "serenity-now": ... }` map doesn't stick: `yarn install` rewrites it back to the
+  string.) The release workflow checks this by running `serenity-now --help` from the packed
+  tarball.
+- **Docs say `npx @billie-coop/serenity-now`** wherever they mean fetching from npm, and
+  `serenity-now` where they mean the installed command (package.json scripts, `--help`).
+  A bare `npx serenity-now` would fetch the deprecated package, so the docs never say it.
+  `DOCS.npmPackage` in `src/docs/content.ts` holds the name for the CLI help and the site; a
+  test keeps it equal to package.json's `name`.
+- **The first version under the new name is 0.4.0.**
+- **Releases go through `.github/workflows/release.yml`** (renamed from `publish.yml`), with
+  npm trusted publishing (OIDC, no token). It is modelled on hereabouts' `release.yml`:
+  manual only, dry run by default, must run from `main`, refuses a version whose `v<version>`
+  tag or npm version already exists, then checks, tests, builds, runs the packed CLI, and
+  publishes with provenance and a GitHub release. Bump `package.json` on `main` first.
+  - It gets Node and yarn the way this repo's CI does (`setup-node` with Node 24, then
+    corepack), not with proto as hereabouts does: the CI and docs workflows already work that
+    way, and `.prototools` here also lists unpinned bun and deno.
+  - It no longer bumps the version, keeps a `release` branch, or needs the `ADMIN_TOKEN`
+    secret. The `release` branch on origin is left as it was.
+  - devDependencies stay in the published manifest: they're plain semver ranges (no
+    `workspace:`), and npm ignores them on install.
+- **`prepublishOnly` is removed.** It ran `biome check --write`, which could change files
+  between the commit and the tarball; the release workflow runs the checks itself.
+- **All workflows use actions that run on Node 24** (`checkout@v6`, `setup-node@v6`,
+  `configure-pages@v6`, `upload-pages-artifact@v5`, `deploy-pages@v5`). GitHub deprecates
+  Node 20 actions.
+- **Docs deploy to GitHub Pages** at `https://billie-coop.github.io/serenity-now/`, unchanged.
+
+## Moving to `@billie-coop/serenity-now` (2026-11-03)
+
+npm only lets a package's trusted publisher be set once the package exists, so the name is
+claimed with a prerelease published by hand, and 0.4.0 goes through the workflow.
+
+1. Rename on `main`: package.json `name`, version 0.4.0, the README, the site, the CLI help,
+   and the release workflow.
+2. Claim the name from Stephen's machine: `0.4.0-rc.0` with `--tag next` (version set locally,
+   not committed).
+3. Trusted publisher:
+   `npm trust github @billie-coop/serenity-now --file release.yml --repo billie-coop/serenity-now --allow-publish`.
+   A new trusted publisher expires after 48 hours unless a workflow publish uses it.
+4. Release 0.4.0 through the workflow: dry run, then real.
+5. Deprecate npm's `0.0.0-stage` placeholder and every bare `serenity-now` version.
+6. Stephen sets "Require two-factor authentication and disallow tokens" on
+   `https://www.npmjs.com/package/@billie-coop/serenity-now/access`.
+
+## Repos that use the bare name
+
+These keep working (deprecating removes nothing) but need switching to
+`@billie-coop/serenity-now` to get new versions: `billie-coop-monorepo` (and its -2/-3/-4
+clones), `billie-tracker-tools`, `billie-coop-test`.

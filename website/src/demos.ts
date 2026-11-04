@@ -35,7 +35,7 @@ export const DEMOS: Demo[] = [
 				`+ import { formatDate } from "@example/utils";`,
 			],
 		},
-		command: "npx serenity-now",
+		command: "npx @billie-coop/serenity-now",
 		output: `${header}
 ═══ Resolving Dependency Graph ═══
 → 5 projects, 8 workspace dependencies
@@ -63,7 +63,7 @@ export const DEMOS: Demo[] = [
 			file: "apps/web/src/index.ts",
 			lines: [`- import { ApiClient } from "@example/api-client";`],
 		},
-		command: "npx serenity-now",
+		command: "npx @billie-coop/serenity-now",
 		output: `${header}
 ═══ Resolving Dependency Graph ═══
 → 5 projects, 6 workspace dependencies
@@ -87,7 +87,7 @@ export const DEMOS: Demo[] = [
 	{
 		id: "check",
 		label: "Check in CI",
-		command: "npx serenity-now --check",
+		command: "npx @billie-coop/serenity-now --check",
 		output: `${header}
 ═══ Resolving Dependency Graph ═══
 → 5 projects, 8 workspace dependencies
@@ -112,7 +112,7 @@ export const DEMOS: Demo[] = [
 	{
 		id: "health",
 		label: "Health report",
-		command: "npx serenity-now health",
+		command: "npx @billie-coop/serenity-now health",
 		output: `${header}
 ═══ Resolving Dependency Graph ═══
 → 5 projects, 7 workspace dependencies
@@ -139,7 +139,7 @@ Most depended-upon packages:
 			file: "packages/utils/src/index.ts",
 			lines: [`+ import { Button } from "@example/ui";`],
 		},
-		command: "npx serenity-now",
+		command: "npx @billie-coop/serenity-now",
 		output: `${header}
 ═══ Resolving Dependency Graph ═══
 → 5 projects, 9 workspace dependencies

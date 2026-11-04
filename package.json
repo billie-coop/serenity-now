@@ -1,6 +1,6 @@
 {
-	"name": "serenity-now",
-	"version": "0.3.1",
+	"name": "@billie-coop/serenity-now",
+	"version": "0.4.0",
 	"description": "Keeps TypeScript monorepo workspace dependencies, tsconfig paths and project references in sync with your imports",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -26,8 +26,7 @@
 		"format": "biome format --write .",
 		"lint": "biome lint .",
 		"check": "biome check --write . && tsc",
-		"typecheck": "tsc",
-		"prepublishOnly": "yarn check && vitest run && yarn build"
+		"typecheck": "tsc"
 	},
 	"keywords": [
 		"monorepo",

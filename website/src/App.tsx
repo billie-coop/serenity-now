@@ -44,7 +44,7 @@ function NavBar({ view }: { view: View }) {
 			</a>
 			<div className="ml-auto flex items-center gap-4">
 				<a
-					href="https://www.npmjs.com/package/serenity-now"
+					href="https://www.npmjs.com/package/@billie-coop/serenity-now"
 					target="_blank"
 					rel="noreferrer"
 					className={`hidden sm:inline ${external}`}

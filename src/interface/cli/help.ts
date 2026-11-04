@@ -16,6 +16,7 @@ export function formatHelp(): string {
 		"",
 		"Usage:",
 		"  serenity-now [command] [options]",
+		`  npx ${DOCS.npmPackage} [command] [options]   (without installing)`,
 		"",
 		"Commands:",
 		...DOCS.commands.map((c) => column(c.name, c.description)),

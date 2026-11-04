@@ -12,6 +12,9 @@ export interface CliOptionDoc {
 }
 
 export const DOCS = {
+	/** The npm package; the command it installs is `serenity-now`. */
+	npmPackage: "@billie-coop/serenity-now",
+
 	tagline: "Keep your TypeScript monorepo dependencies in sync",
 
 	description:

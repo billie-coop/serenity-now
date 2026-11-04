@@ -1,0 +1,117 @@
+name: Release
+
+# Publishes @billie-coop/serenity-now at the version committed in
+# package.json. Bump it on main first, then run this workflow by hand: once as
+# a dry run (the default), then with dry-run unticked. It never runs on its own.
+#
+# Authenticates via npm trusted publishing (OIDC), no NPM_TOKEN. The trusted
+# publisher on npmjs.com must be: owner billie-coop, repo serenity-now,
+# workflow release.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Dry run (npm publish --dry-run, no GitHub release)'
+        required: false
+        type: boolean
+        default: true
+
+env:
+  PACKAGE_NAME: '@billie-coop/serenity-now'
+
+jobs:
+  release:
+    name: Publish to npm & create GitHub release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Require main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Release must run from main (got ${{ github.ref }})"
+          exit 1
+
+      - name: Checkout repo
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # Node 24 ships npm 11, which trusted publishing (OIDC) requires.
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Corepack provides the yarn version pinned in package.json's packageManager
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          # Prereleases (0.5.0-rc.1) go to 'next'; stable versions to 'latest'
+          if [[ "$VERSION" == *-* ]]; then
+            echo "dist-tag=next" >> $GITHUB_OUTPUT
+          else
+            echo "dist-tag=latest" >> $GITHUB_OUTPUT
+          fi
+          echo "Releasing $PACKAGE_NAME@$VERSION"
+
+      - name: Ensure version is unreleased
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null; then
+            echo "::error::Tag v$VERSION already exists. Bump package.json first"
+            exit 1
+          fi
+          if npm view "$PACKAGE_NAME@$VERSION" version > /dev/null 2>&1; then
+            echo "::error::$PACKAGE_NAME@$VERSION is already on npm. Bump package.json first"
+            exit 1
+          fi
+
+      - name: Lint and typecheck
+        run: yarn biome ci . && yarn tsc
+
+      - name: Test
+        run: yarn vitest run
+
+      - name: Build
+        run: yarn build
+
+      # Smoke test: the packed CLI runs under the name npx resolves to.
+      - name: Run the packed CLI
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP"
+          npm exec --yes --package ./billie-coop-serenity-now-*.tgz -- serenity-now --help
+
+      - name: Publish to npm (dry run)
+        if: ${{ inputs.dry-run }}
+        run: npm publish --dry-run --access public --tag "${{ steps.version.outputs.dist-tag }}"
+
+      - name: Publish to npm
+        if: ${{ !inputs.dry-run }}
+        run: npm publish --provenance --access public --tag "${{ steps.version.outputs.dist-tag }}"
+
+      - name: Create GitHub release
+        if: ${{ !inputs.dry-run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          DIST_TAG: ${{ steps.version.outputs.dist-tag }}
+        run: |
+          PRERELEASE=""
+          if [[ "$DIST_TAG" == "next" ]]; then PRERELEASE="--prerelease"; fi
+          gh release create "v$VERSION" --title "v$VERSION" --generate-notes \
+            --target "${{ github.sha }}" $PRERELEASE
