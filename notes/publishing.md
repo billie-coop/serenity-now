@@ -41,20 +41,38 @@ Update this file as things are decided or done.
 
 ## Moving to `@billie-coop/serenity-now` (2026-11-03)
 
-npm only lets a package's trusted publisher be set once the package exists, so the name is
-claimed with a prerelease published by hand, and 0.4.0 goes through the workflow.
+npm only lets a package's trusted publisher be set once the package exists, so the name was
+claimed with a prerelease published by hand, and 0.4.0 went through the workflow. All done
+2026-11-03 except step 6.
 
-1. Rename on `main`: package.json `name`, version 0.4.0, the README, the site, the CLI help,
-   and the release workflow.
-2. Claim the name from Stephen's machine: `0.4.0-rc.0` with `--tag next` (version set locally,
-   not committed).
-3. Trusted publisher:
+1. Done: renamed on `main` (`11bfcec`): package.json `name`, version 0.4.0, the README, the
+   site, the CLI help and the release workflow. CI and the docs deploy passed, and the live
+   site says `npx @billie-coop/serenity-now`.
+2. Done: claimed the name from Stephen's machine with npm 11, after `yarn build`:
+   `npm pkg set version=0.4.0-rc.0`, `npm publish --access public --tag next` (browser 2FA),
+   then `git checkout package.json`. npm also created its `0.0.0-stage` placeholder, and
+   tagged the rc `latest` until 0.4.0 replaced it.
+3. Done: trusted publisher, with browser 2FA:
    `npm trust github @billie-coop/serenity-now --file release.yml --repo billie-coop/serenity-now --allow-publish`.
-   A new trusted publisher expires after 48 hours unless a workflow publish uses it.
-4. Release 0.4.0 through the workflow: dry run, then real.
-5. Deprecate npm's `0.0.0-stage` placeholder and every bare `serenity-now` version.
-6. Stephen sets "Require two-factor authentication and disallow tokens" on
+   npm gave it "publish, stage publish".
+4. Done: Release workflow dry run
+   ([41762598777](https://github.com/billie-coop/serenity-now/actions/runs/41762598777)), then
+   the real run ([41762674680](https://github.com/billie-coop/serenity-now/actions/runs/41762674680)):
+   0.4.0 is `latest` with a SLSA v1 provenance attestation, and the GitHub release
+   [v0.4.0](https://github.com/billie-coop/serenity-now/releases/tag/v0.4.0) exists. That
+   publish also validated the trusted publisher. `npx @billie-coop/serenity-now --help` and a
+   `--dry-run` on a copy of `example/` work from a clean directory.
+   - npm warns that it "auto-corrected" `bin` while publishing (string to object, and "script
+     name dist/cli.js was invalid and removed"). The published manifest is fine:
+     `"bin": { "serenity-now": "dist/cli.js" }`, as in 0.3.1.
+5. Done: deprecated `@billie-coop/serenity-now@0.0.0-stage` ("npm staging placeholder; use
+   0.4.0 or later") and every bare `serenity-now` version, 0.1.1 to 0.3.1 ("Moved to
+   @billie-coop/serenity-now: npm install @billie-coop/serenity-now"). Nothing is unpublished.
+6. **Open:** Stephen sets "Require two-factor authentication and disallow tokens" on
    `https://www.npmjs.com/package/@billie-coop/serenity-now/access`.
+
+Left as they were: the `next` dist-tag still points to `0.4.0-rc.0`; the old `release`
+branch on origin; the `ADMIN_TOKEN` repo secret, which no workflow uses now.
 
 ## Repos that use the bare name
 
