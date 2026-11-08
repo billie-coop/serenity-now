@@ -2,11 +2,18 @@
 @plugin "@tailwindcss/typography";
 
 :root {
-	color-scheme: light;
+	/* Shared Billie co-op palette; intentionally independent of system theme. */
+	--site-bg: #0f172a;
+	--site-surface: #1e293b;
+	--site-text: #f1f5f9;
+	--site-muted: #94a3b8;
+	--site-border: #334155;
+	--site-accent: #5eead4;
+	color-scheme: dark;
 	font-family:
 		system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-	color: #0f172a;
-	background: #fff;
+	color: var(--site-text);
+	background: var(--site-bg);
 }
 
 body {
@@ -30,8 +37,8 @@ body {
 	position: sticky;
 	top: 0;
 	z-index: 10;
-	border-bottom: 1px solid #e2e8f0;
-	background: #fff;
+	border-bottom: 1px solid var(--site-border);
+	background: var(--site-bg);
 }
 
 .site-header-inner {
@@ -53,7 +60,7 @@ body {
 }
 
 .site-brand span {
-	color: #475569;
+	color: var(--site-muted);
 	font-size: 12px;
 }
 
@@ -68,13 +75,13 @@ body {
 .site-nav a {
 	padding: 8px 10px;
 	border-radius: 6px;
-	color: #475569;
+	color: var(--site-muted);
 }
 
 .site-nav a:hover,
 .site-nav a[aria-current="page"] {
-	color: #0f766e;
-	background: #f8fafc;
+	color: var(--site-accent);
+	background: var(--site-surface);
 }
 
 .site-main {
@@ -82,7 +89,7 @@ body {
 }
 
 .site-eyebrow {
-	color: #0f766e;
+	color: var(--site-accent);
 	font-size: 12px;
 	font-weight: 600;
 	letter-spacing: 0.1em;
@@ -91,7 +98,7 @@ body {
 
 .docs-intro {
 	padding-block: 48px 32px;
-	border-bottom: 1px solid #e2e8f0;
+	border-bottom: 1px solid var(--site-border);
 	margin-bottom: 32px;
 }
 
@@ -102,8 +109,8 @@ body {
 	gap: 16px;
 	margin-top: 48px;
 	padding-block: 32px;
-	border-top: 1px solid #e2e8f0;
-	color: #475569;
+	border-top: 1px solid var(--site-border);
+	color: var(--site-muted);
 	font-size: 14px;
 }
 
@@ -114,12 +121,12 @@ body {
 }
 
 .site-footer a:hover {
-	color: #0f766e;
+	color: var(--site-accent);
 	text-decoration: underline;
 }
 
 :focus-visible {
-	outline: 2px solid #0f766e;
+	outline: 2px solid var(--site-accent);
 	outline-offset: 4px;
 }
 
@@ -130,9 +137,9 @@ body {
 	z-index: 20;
 	transform: translateY(-150%);
 	padding: 10px 16px;
-	border: 1px solid #0f766e;
+	border: 1px solid var(--site-accent);
 	border-radius: 6px;
-	background: #fff;
+	background: var(--site-bg);
 }
 
 .skip-link:focus {
@@ -168,10 +175,24 @@ body {
 }
 
 /* Reference view: structure on top of the repo's rendered README. */
+.reference-prose {
+	--tw-prose-body: var(--site-muted);
+	--tw-prose-headings: var(--site-text);
+	--tw-prose-bold: var(--site-text);
+	--tw-prose-code: var(--site-text);
+	--tw-prose-links: var(--site-accent);
+	--tw-prose-counters: var(--site-muted);
+	--tw-prose-bullets: var(--site-muted);
+	--tw-prose-hr: var(--site-border);
+	--tw-prose-quotes: var(--site-text);
+	--tw-prose-quote-borders: var(--site-border);
+	--tw-prose-th-borders: var(--site-border);
+	--tw-prose-td-borders: var(--site-border);
+}
 .reference-prose h2 {
 	margin-top: 3rem;
 	padding-top: 2rem;
-	border-top: 1px solid #e2e8f0;
+	border-top: 1px solid var(--site-border);
 }
 .reference-prose > h2:first-child {
 	margin-top: 0;
@@ -180,8 +201,8 @@ body {
 }
 
 .reference-prose :not(pre) > code {
-	background: #f8fafc;
-	border: 1px solid #e2e8f0;
+	background: var(--site-surface);
+	border: 1px solid var(--site-border);
 	border-radius: 0.25rem;
 	padding: 0.1rem 0.3rem;
 	font-weight: 500;

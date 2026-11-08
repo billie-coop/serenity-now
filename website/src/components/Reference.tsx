@@ -152,15 +152,15 @@ export function Reference() {
 		<>
 			<header className="docs-intro">
 				<p className="site-eyebrow mb-4">serenity-now</p>
-				<h1 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+				<h1 className="text-4xl font-bold tracking-tight text-(--site-text) sm:text-5xl">
 					Documentation
 				</h1>
-				<p className="mt-4 text-lg text-slate-600">
+				<p className="mt-4 text-lg text-(--site-muted)">
 					Get started, configure your workspace, and keep it in sync.
 				</p>
 			</header>
-			<details className="mb-8 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:hidden">
-				<summary className="cursor-pointer text-sm font-medium text-slate-700">
+			<details className="mb-8 rounded-lg border border-(--site-border) bg-(--site-surface) p-4 lg:hidden">
+				<summary className="cursor-pointer text-sm font-medium text-(--site-text)">
 					On this page
 				</summary>
 				<nav
@@ -173,7 +173,7 @@ export function Reference() {
 							<a
 								key={entry.id}
 								href={`#reference/${entry.id}`}
-								className="text-teal-700 hover:underline"
+								className="text-(--site-accent) hover:underline"
 							>
 								{entry.text}
 							</a>
@@ -186,10 +186,10 @@ export function Reference() {
 					aria-label="Table of contents"
 				>
 					<div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pb-8">
-						<p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+						<p className="mb-3 text-xs font-semibold uppercase tracking-wide text-(--site-muted)">
 							On this page
 						</p>
-						<ul className="space-y-1 border-l border-slate-200 text-sm">
+						<ul className="space-y-1 border-l border-(--site-border) text-sm">
 							{referenceToc.map((entry) => (
 								<li key={entry.id}>
 									<a
@@ -198,8 +198,8 @@ export function Reference() {
 											entry.level === 3 ? "pl-7" : "pl-4"
 										} ${
 											activeId === entry.id
-												? "border-teal-600 font-medium text-teal-700"
-												: "border-transparent text-slate-500 hover:border-slate-400 hover:text-slate-900"
+												? "border-(--site-accent) font-medium text-(--site-accent)"
+												: "border-transparent text-(--site-muted) hover:border-(--site-muted) hover:text-(--site-text)"
 										}`}
 									>
 										{entry.text}
@@ -211,7 +211,7 @@ export function Reference() {
 				</nav>
 				<article
 					ref={articleRef}
-					className="reference-prose prose prose-slate min-w-0 max-w-[52rem] flex-1 pb-16 prose-headings:scroll-mt-24 prose-a:text-teal-700 prose-pre:border prose-pre:border-slate-700/60 prose-pre:bg-slate-950 prose-pre:text-slate-100 prose-pre:shadow-sm prose-code:before:content-none prose-code:after:content-none"
+					className="reference-prose prose prose-slate prose-invert min-w-0 max-w-[52rem] flex-1 pb-16 prose-headings:scroll-mt-24 prose-a:text-(--site-accent) prose-pre:border prose-pre:border-slate-700/60 prose-pre:bg-slate-950 prose-pre:text-(--site-text) prose-pre:shadow-sm prose-code:before:content-none prose-code:after:content-none"
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: rendering our own README from this repo, not user input
 					dangerouslySetInnerHTML={{ __html: referenceHtml }}
 				/>
