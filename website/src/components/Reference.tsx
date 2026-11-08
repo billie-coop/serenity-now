@@ -211,7 +211,7 @@ export function Reference() {
 				</nav>
 				<article
 					ref={articleRef}
-					className="reference-prose prose prose-slate prose-invert min-w-0 max-w-[52rem] flex-1 pb-16 prose-headings:scroll-mt-24 prose-a:text-(--site-accent) prose-pre:border prose-pre:border-slate-700/60 prose-pre:bg-slate-950 prose-pre:text-(--site-text) prose-pre:shadow-sm prose-code:before:content-none prose-code:after:content-none"
+					className="reference-prose prose prose-slate dark:prose-invert min-w-0 max-w-[52rem] flex-1 pb-16 prose-headings:scroll-mt-24 prose-a:text-(--site-accent) prose-pre:border prose-pre:border-slate-700/60 prose-pre:bg-slate-950 prose-pre:text-slate-100 prose-pre:shadow-sm prose-code:before:content-none prose-code:after:content-none"
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: rendering our own README from this repo, not user input
 					dangerouslySetInnerHTML={{ __html: referenceHtml }}
 				/>

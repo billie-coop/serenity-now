@@ -15,6 +15,35 @@ function useHashView(): View {
 	return hash.startsWith("#reference") ? "reference" : "overview";
 }
 
+function ThemeToggle() {
+	const [theme, setTheme] = useState(() =>
+		document.documentElement.dataset.theme === "light" ? "light" : "dark",
+	);
+	const nextTheme = theme === "dark" ? "light" : "dark";
+	return (
+		<button
+			type="button"
+			className="theme-toggle"
+			aria-label={`Switch to ${nextTheme} mode`}
+			title={`Switch to ${nextTheme} mode`}
+			onClick={() => {
+				const root = document.documentElement;
+				root.dataset.theme = nextTheme;
+				root.classList.toggle("dark", nextTheme === "dark");
+				root.style.colorScheme = nextTheme;
+				setTheme(nextTheme);
+				try {
+					localStorage.setItem("billie-coop-theme", nextTheme);
+				} catch {
+					// Keep the switch working even when storage is unavailable.
+				}
+			}}
+		>
+			{nextTheme === "light" ? "Light" : "Dark"}
+		</button>
+	);
+}
+
 function NavBar({ view }: { view: View }) {
 	return (
 		<header className="site-header">
@@ -37,6 +66,7 @@ function NavBar({ view }: { view: View }) {
 						Docs
 					</a>
 					<a href="https://github.com/billie-coop/serenity-now">GitHub ↗</a>
+					<ThemeToggle />
 				</nav>
 			</div>
 		</header>

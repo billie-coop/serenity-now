@@ -1,19 +1,30 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-	/* Shared Billie co-op palette; intentionally independent of system theme. */
-	--site-bg: #0f172a;
-	--site-surface: #1e293b;
-	--site-text: #f1f5f9;
-	--site-muted: #94a3b8;
-	--site-border: #334155;
+	/* Shared Billie co-op neutrals, with serenity-now's teal accent. */
+	--site-bg: #191d24;
+	--site-surface: #252b34;
+	--site-text: #f1f3f5;
+	--site-muted: #a6adb8;
+	--site-border: #3b4350;
 	--site-accent: #5eead4;
 	color-scheme: dark;
 	font-family:
 		system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	color: var(--site-text);
 	background: var(--site-bg);
+}
+
+:root[data-theme="light"] {
+	--site-bg: #fafbfc;
+	--site-surface: #f0f2f5;
+	--site-text: #20252d;
+	--site-muted: #596273;
+	--site-border: #d4d9e1;
+	--site-accent: #0f766e;
+	color-scheme: light;
 }
 
 body {
@@ -82,6 +93,20 @@ body {
 .site-nav a[aria-current="page"] {
 	color: var(--site-accent);
 	background: var(--site-surface);
+}
+
+.theme-toggle {
+	padding: 6px 10px;
+	border: 1px solid var(--site-border);
+	border-radius: 6px;
+	background: var(--site-surface);
+	color: var(--site-text);
+	font-size: 14px;
+	cursor: pointer;
+}
+
+.theme-toggle:hover {
+	border-color: var(--site-accent);
 }
 
 .site-main {
@@ -174,9 +199,28 @@ body {
 	}
 }
 
+@media (max-width: 420px) {
+	.site-header-inner {
+		gap: 12px;
+	}
+
+	.site-brand {
+		flex-direction: row;
+		align-items: baseline;
+		gap: 8px;
+	}
+
+	.site-nav {
+		width: 100%;
+		justify-content: space-between;
+	}
+}
+
 /* Reference view: structure on top of the repo's rendered README. */
 .reference-prose {
 	--tw-prose-body: var(--site-muted);
+	--tw-prose-lead: var(--site-muted);
+	--tw-prose-captions: var(--site-muted);
 	--tw-prose-headings: var(--site-text);
 	--tw-prose-bold: var(--site-text);
 	--tw-prose-code: var(--site-text);

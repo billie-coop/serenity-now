@@ -95,7 +95,7 @@ function ThreeFiles() {
 						<p className="border-b border-(--site-border) px-4 py-2.5 font-mono text-xs text-(--site-muted)">
 							{f.file}
 						</p>
-						<pre className="flex-1 overflow-x-auto bg-slate-950 px-4 py-3 font-mono text-xs leading-relaxed text-(--site-text)">
+						<pre className="flex-1 overflow-x-auto bg-slate-950 px-4 py-3 font-mono text-xs leading-relaxed text-slate-100">
 							{f.code}
 						</pre>
 					</div>
