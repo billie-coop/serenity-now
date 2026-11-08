@@ -1,59 +1,198 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
-/* The app container is centered with a max width; paint the document
-   behind it the same color so wide screens don't show white gutters */
-html {
-	background-color: #fff;
+:root {
+	color-scheme: light;
+	font-family:
+		system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	color: #0f172a;
+	background: #fff;
 }
-@media (prefers-color-scheme: dark) {
-	html {
-		background-color: #111827; /* matches the app's dark:bg-gray-900 */
+
+body {
+	margin: 0;
+}
+
+.site-shell {
+	display: flex;
+	min-height: 100vh;
+	flex-direction: column;
+}
+
+.site-container {
+	width: 100%;
+	max-width: 72rem;
+	margin-inline: auto;
+	padding-inline: 24px;
+}
+
+.site-header {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	border-bottom: 1px solid #e2e8f0;
+	background: #fff;
+}
+
+.site-header-inner {
+	display: flex;
+	min-height: 72px;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+}
+
+.site-brand {
+	display: flex;
+	flex-direction: column;
+	line-height: 1.4;
+}
+
+.site-brand strong {
+	font-size: 18px;
+}
+
+.site-brand span {
+	color: #475569;
+	font-size: 12px;
+}
+
+.site-nav {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 14px;
+	font-weight: 500;
+}
+
+.site-nav a {
+	padding: 8px 10px;
+	border-radius: 6px;
+	color: #475569;
+}
+
+.site-nav a:hover,
+.site-nav a[aria-current="page"] {
+	color: #0f766e;
+	background: #f8fafc;
+}
+
+.site-main {
+	flex: 1;
+}
+
+.site-eyebrow {
+	color: #0f766e;
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+
+.docs-intro {
+	padding-block: 48px 32px;
+	border-bottom: 1px solid #e2e8f0;
+	margin-bottom: 32px;
+}
+
+.site-footer {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 16px;
+	margin-top: 48px;
+	padding-block: 32px;
+	border-top: 1px solid #e2e8f0;
+	color: #475569;
+	font-size: 14px;
+}
+
+.site-footer nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 20px;
+}
+
+.site-footer a:hover {
+	color: #0f766e;
+	text-decoration: underline;
+}
+
+:focus-visible {
+	outline: 2px solid #0f766e;
+	outline-offset: 4px;
+}
+
+.skip-link {
+	position: fixed;
+	top: 8px;
+	left: 20px;
+	z-index: 20;
+	transform: translateY(-150%);
+	padding: 10px 16px;
+	border: 1px solid #0f766e;
+	border-radius: 6px;
+	background: #fff;
+}
+
+.skip-link:focus {
+	transform: translateY(0);
+}
+
+@media (max-width: 639px) {
+	.site-container {
+		padding-inline: 20px;
+	}
+
+	.site-header-inner {
+		flex-wrap: wrap;
+		gap: 8px;
+		padding-block: 12px;
+	}
+
+	.site-nav {
+		gap: 0;
+	}
+
+	.site-nav a {
+		padding: 8px;
+	}
+
+	.site-footer {
+		flex-direction: column;
+	}
+
+	.reference-prose :is(h2, h3) {
+		scroll-margin-top: 9rem;
 	}
 }
 
-/* Reference view: visual structure on top of the rendered README */
-
-/* Clear section breaks before each h2 */
+/* Reference view: structure on top of the repo's rendered README. */
 .reference-prose h2 {
 	margin-top: 3rem;
 	padding-top: 2rem;
-	border-top: 1px solid #e5e7eb;
+	border-top: 1px solid #e2e8f0;
 }
 .reference-prose > h2:first-child {
 	margin-top: 0;
 	padding-top: 0;
 	border-top: none;
 }
-@media (prefers-color-scheme: dark) {
-	.reference-prose h2 {
-		border-top-color: #1f2937;
-	}
-}
 
-/* Inline code as a subtle chip, distinct from prose without shouting.
-   (Code inside pre blocks keeps the block styling.) */
 .reference-prose :not(pre) > code {
-	background-color: #f3f4f6;
-	border: 1px solid #e5e7eb;
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
 	border-radius: 0.25rem;
 	padding: 0.1rem 0.3rem;
 	font-weight: 500;
-}
-@media (prefers-color-scheme: dark) {
-	.reference-prose :not(pre) > code {
-		background-color: #1f2937;
-		border-color: #374151;
-	}
+	overflow-wrap: anywhere;
 }
 
-/* Wide tables (the options table) scroll instead of breaking the column */
 .reference-prose table {
 	display: block;
 	overflow-x: auto;
 }
 
-/* Added and removed lines in the README's CLI output samples */
 .reference-prose .out-add {
 	color: #6ee7b7;
 }

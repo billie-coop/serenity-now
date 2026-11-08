@@ -122,6 +122,7 @@ export function Reference() {
 		const onHashChange = () => {
 			const target = currentSection();
 			if (target) scrollToSection(target);
+			else window.scrollTo({ top: 0 });
 		};
 		window.addEventListener("hashchange", onHashChange);
 		return () => window.removeEventListener("hashchange", onHashChange);
@@ -141,48 +142,80 @@ export function Reference() {
 				}
 			},
 			// A band just below the sticky nav: the heading crossing it is "active"
-			{ rootMargin: "-64px 0px -75% 0px" },
+			{ rootMargin: "-96px 0px -75% 0px" },
 		);
 		for (const h of root.querySelectorAll("h2, h3")) observer.observe(h);
 		return () => observer.disconnect();
 	}, []);
 
 	return (
-		<div className="mx-auto flex max-w-7xl gap-10">
-			<nav
-				className="hidden w-56 shrink-0 lg:block"
-				aria-label="Table of contents"
-			>
-				<div className="sticky top-16 max-h-[calc(100vh-5rem)] overflow-y-auto pb-8">
-					<p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-						On this page
-					</p>
-					<ul className="space-y-1 border-l border-gray-200 text-sm dark:border-gray-800">
-						{referenceToc.map((entry) => (
-							<li key={entry.id}>
-								<a
-									href={`#reference/${entry.id}`}
-									className={`-ml-px block border-l py-1 leading-snug [overflow-wrap:anywhere] ${
-										entry.level === 3 ? "pl-7" : "pl-4"
-									} ${
-										activeId === entry.id
-											? "border-teal-600 font-medium text-teal-700 dark:border-teal-400 dark:text-teal-300"
-											: "border-transparent text-gray-500 hover:border-gray-400 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-									}`}
-								>
-									{entry.text}
-								</a>
-							</li>
+		<>
+			<header className="docs-intro">
+				<p className="site-eyebrow mb-4">serenity-now</p>
+				<h1 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+					Documentation
+				</h1>
+				<p className="mt-4 text-lg text-slate-600">
+					Get started, configure your workspace, and keep it in sync.
+				</p>
+			</header>
+			<details className="mb-8 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:hidden">
+				<summary className="cursor-pointer text-sm font-medium text-slate-700">
+					On this page
+				</summary>
+				<nav
+					aria-label="Mobile table of contents"
+					className="mt-3 grid gap-2 text-sm"
+				>
+					{referenceToc
+						.filter((entry) => entry.level === 2)
+						.map((entry) => (
+							<a
+								key={entry.id}
+								href={`#reference/${entry.id}`}
+								className="text-teal-700 hover:underline"
+							>
+								{entry.text}
+							</a>
 						))}
-					</ul>
-				</div>
-			</nav>
-			<article
-				ref={articleRef}
-				className="reference-prose prose prose-gray min-w-0 max-w-[52rem] flex-1 pb-16 dark:prose-invert prose-headings:scroll-mt-20 prose-a:text-teal-700 dark:prose-a:text-teal-300 prose-pre:border prose-pre:border-gray-700/60 prose-pre:bg-gray-950 prose-pre:text-gray-100 prose-pre:shadow-sm prose-code:before:content-none prose-code:after:content-none"
-				// biome-ignore lint/security/noDangerouslySetInnerHtml: rendering our own README from this repo, not user input
-				dangerouslySetInnerHTML={{ __html: referenceHtml }}
-			/>
-		</div>
+				</nav>
+			</details>
+			<div className="mx-auto flex gap-10">
+				<nav
+					className="hidden w-56 shrink-0 lg:block"
+					aria-label="Table of contents"
+				>
+					<div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pb-8">
+						<p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+							On this page
+						</p>
+						<ul className="space-y-1 border-l border-slate-200 text-sm">
+							{referenceToc.map((entry) => (
+								<li key={entry.id}>
+									<a
+										href={`#reference/${entry.id}`}
+										className={`-ml-px block border-l py-1 leading-snug [overflow-wrap:anywhere] ${
+											entry.level === 3 ? "pl-7" : "pl-4"
+										} ${
+											activeId === entry.id
+												? "border-teal-600 font-medium text-teal-700"
+												: "border-transparent text-slate-500 hover:border-slate-400 hover:text-slate-900"
+										}`}
+									>
+										{entry.text}
+									</a>
+								</li>
+							))}
+						</ul>
+					</div>
+				</nav>
+				<article
+					ref={articleRef}
+					className="reference-prose prose prose-slate min-w-0 max-w-[52rem] flex-1 pb-16 prose-headings:scroll-mt-24 prose-a:text-teal-700 prose-pre:border prose-pre:border-slate-700/60 prose-pre:bg-slate-950 prose-pre:text-slate-100 prose-pre:shadow-sm prose-code:before:content-none prose-code:after:content-none"
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: rendering our own README from this repo, not user input
+					dangerouslySetInnerHTML={{ __html: referenceHtml }}
+				/>
+			</div>
+		</>
 	);
 }
