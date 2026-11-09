@@ -18,10 +18,10 @@ function CopyCommand({ command }: { command: string }) {
 			type="button"
 			onClick={copy}
 			title="Copy to clipboard"
-			className="group flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 font-mono text-sm text-gray-100 shadow-sm hover:bg-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700"
+			className="group flex max-w-full flex-wrap items-center gap-2 text-left rounded-md bg-(--site-surface) px-4 py-2 font-mono text-sm text-(--site-text) shadow-sm hover:bg-(--site-border)"
 		>
-			<span className="text-gray-500">$</span> {command}
-			<span className="text-xs text-gray-400 group-hover:text-gray-200">
+			<span className="text-(--site-muted)">$</span> {command}
+			<span className="text-xs text-(--site-muted) group-hover:text-(--site-text)">
 				{copied ? "✓ copied" : "copy"}
 			</span>
 		</button>
@@ -30,24 +30,23 @@ function CopyCommand({ command }: { command: string }) {
 
 function Hero() {
 	return (
-		<section className="grid grid-cols-1 gap-10 py-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-center">
+		<section className="grid grid-cols-1 gap-8 pt-7 pb-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-center lg:pt-8 lg:pb-7">
 			<div>
-				<h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl dark:text-white">
+				<h1 className="text-3xl font-bold tracking-tight text-(--site-text) sm:text-4xl">
 					serenity-now
 				</h1>
-				<p className="mt-4 text-lg text-gray-600 dark:text-gray-300">
-					Keeps your TypeScript monorepo's workspace dependencies, tsconfig{" "}
+				<p className="mt-4 text-base text-(--site-muted)">
+					Syncs TypeScript monorepo dependencies, tsconfig{" "}
 					<code className="text-base">paths</code> and project{" "}
-					<code className="text-base">references</code> in sync with the imports
-					your code actually uses.
+					<code className="text-base">references</code> with your imports.
 				</p>
 				<div className="mt-6 flex flex-wrap items-center gap-3">
 					<CopyCommand command={`npx ${DOCS.npmPackage}`} />
 					<a
 						href="#reference"
-						className="rounded-md px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-gray-800"
+						className="rounded-md px-3 py-2 text-sm font-medium text-(--site-accent) hover:bg-(--site-surface)"
 					>
-						Read the docs →
+						Docs →
 					</a>
 				</div>
 			</div>
@@ -78,23 +77,20 @@ const THREE_FILES = [
 
 function ThreeFiles() {
 	return (
-		<section className="py-12">
-			<h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-				Three files that have to agree
+		<section className="py-8">
+			<h2 className="text-2xl font-bold tracking-tight text-(--site-text)">
+				Examples
 			</h2>
-			<p className="mt-2 max-w-3xl text-gray-600 dark:text-gray-300">
-				serenity-now reads the import and rewrites the other two to match.
-			</p>
-			<div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+			<div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
 				{THREE_FILES.map((f) => (
 					<div
 						key={f.file}
-						className="flex flex-col overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800"
+						className="flex flex-col overflow-hidden rounded-lg border border-(--site-border)"
 					>
-						<p className="border-b border-gray-200 px-4 py-2.5 font-mono text-xs text-gray-600 dark:border-gray-800 dark:text-gray-300">
+						<p className="border-b border-(--site-border) px-3 py-2 font-mono text-xs text-(--site-muted)">
 							{f.file}
 						</p>
-						<pre className="flex-1 overflow-x-auto bg-gray-950 px-4 py-3 font-mono text-xs leading-relaxed text-gray-100">
+						<pre className="flex-1 overflow-x-auto bg-slate-950 px-3 py-2 font-mono text-xs leading-normal text-slate-100">
 							{f.code}
 						</pre>
 					</div>
@@ -106,65 +102,37 @@ function ThreeFiles() {
 
 function Commands() {
 	return (
-		<section className="py-12">
-			<h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+		<section className="py-8">
+			<h2 className="text-2xl font-bold tracking-tight text-(--site-text)">
 				Commands
 			</h2>
-			<div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+			<div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
 				{DOCS.commands.map((c) => (
 					<div
 						key={c.name}
-						className="rounded-lg border border-gray-200 p-4 dark:border-gray-800"
+						className="rounded-lg border border-(--site-border) p-3"
 					>
-						<code className="font-mono text-sm font-semibold text-teal-700 dark:text-teal-300">
+						<code className="font-mono text-sm font-semibold text-(--site-accent)">
 							npx {DOCS.npmPackage}
 							{c.name === "sync" ? "" : ` ${c.name}`}
 						</code>
-						<p className="mt-1.5 text-sm text-gray-600 dark:text-gray-300">
+						<p className="mt-1.5 text-sm text-(--site-muted)">
 							{c.description}
 						</p>
 					</div>
 				))}
 			</div>
-			<p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
+			<p className="mt-4 text-sm text-(--site-muted)">
 				Add <code>--dry-run</code> to preview a sync, or <code>--check</code> to
 				fail CI when anything is out of sync.{" "}
 				<a
 					href="#reference/commands"
-					className="font-medium text-teal-700 hover:underline dark:text-teal-300"
+					className="font-medium text-(--site-accent) hover:underline"
 				>
 					All options →
 				</a>
 			</p>
 		</section>
-	);
-}
-
-function Footer() {
-	return (
-		<footer className="mt-8 flex flex-col items-center gap-4 border-t border-gray-200 py-12 text-center dark:border-gray-800">
-			<img
-				src={gif}
-				alt="Frank Costanza yelling &quot;Serenity now!&quot;"
-				width={280}
-				className="rounded-lg"
-				loading="lazy"
-			/>
-			<p className="max-w-md text-sm text-gray-500 dark:text-gray-400">
-				Because keeping monorepo dependencies in sync by hand will have you
-				yelling <strong>"SERENITY NOW!"</strong> at your monitor.
-			</p>
-			<p className="text-xs text-gray-400 dark:text-gray-500">
-				MIT licensed. Made at{" "}
-				<a
-					href="https://github.com/billie-coop"
-					className="hover:text-gray-600 dark:hover:text-gray-300"
-				>
-					billie-coop
-				</a>
-				.
-			</p>
-		</footer>
 	);
 }
 
@@ -174,7 +142,15 @@ export function Overview() {
 			<Hero />
 			<ThreeFiles />
 			<Commands />
-			<Footer />
+			<div className="mt-8 flex justify-center border-t border-(--site-border) py-8">
+				<img
+					src={gif}
+					alt="Frank Costanza yelling"
+					width={280}
+					className="rounded-lg"
+					loading="lazy"
+				/>
+			</div>
 		</>
 	);
 }

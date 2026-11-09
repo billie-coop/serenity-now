@@ -4,11 +4,7 @@ import { Reference } from "./components/Reference";
 
 type View = "overview" | "reference";
 
-/**
- * Hash-based view switching so views are linkable without a router.
- * `#reference` selects the docs view; `#reference/<section>` deep-links
- * into a section (handled inside Reference); anything else is the overview.
- */
+/** Preserve the existing hash routes, including README section deep links. */
 function useHashView(): View {
 	const [hash, setHash] = useState(() => window.location.hash);
 	useEffect(() => {
@@ -19,63 +15,116 @@ function useHashView(): View {
 	return hash.startsWith("#reference") ? "reference" : "overview";
 }
 
-function NavBar({ view }: { view: View }) {
-	const tabClass = (active: boolean) =>
-		`rounded-md px-3 py-1.5 text-sm font-medium ${
-			active
-				? "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white"
-				: "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-		}`;
-	const external =
-		"text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white";
+function ThemeToggle() {
+	const [theme, setTheme] = useState(() =>
+		document.documentElement.dataset.theme === "light" ? "light" : "dark",
+	);
+	const nextTheme = theme === "dark" ? "light" : "dark";
 	return (
-		<nav className="sticky top-0 z-10 mb-6 flex items-center gap-2 border-b border-gray-200 bg-white/90 py-3 backdrop-blur dark:border-gray-800 dark:bg-gray-900/90">
-			<a
-				href="#overview"
-				className="mr-2 text-lg font-bold text-gray-900 dark:text-white"
-			>
-				serenity-now
-			</a>
-			<a href="#overview" className={tabClass(view === "overview")}>
-				Overview
-			</a>
-			<a href="#reference" className={tabClass(view === "reference")}>
-				Docs
-			</a>
-			<div className="ml-auto flex items-center gap-4">
-				<a
-					href="https://www.npmjs.com/package/@billie-coop/serenity-now"
-					target="_blank"
-					rel="noreferrer"
-					className={`hidden sm:inline ${external}`}
-				>
-					npm ↗
+		<button
+			type="button"
+			className="theme-toggle"
+			aria-label={`Switch to ${nextTheme} mode`}
+			title={`Switch to ${nextTheme} mode`}
+			onClick={() => {
+				const root = document.documentElement;
+				root.dataset.theme = nextTheme;
+				root.classList.toggle("dark", nextTheme === "dark");
+				root.style.colorScheme = nextTheme;
+				setTheme(nextTheme);
+				try {
+					localStorage.setItem("billie-coop-theme", nextTheme);
+				} catch {
+					// Keep the switch working even when storage is unavailable.
+				}
+			}}
+		>
+			{nextTheme === "light" ? "Light" : "Dark"}
+		</button>
+	);
+}
+
+function NavBar({ view }: { view: View }) {
+	return (
+		<header className="site-header">
+			<div className="site-container site-header-inner">
+				<a href="#overview" className="site-brand">
+					<strong>serenity-now</strong>
+					<span>by Billie co-op</span>
 				</a>
-				<a
-					href="https://github.com/billie-coop/serenity-now"
-					target="_blank"
-					rel="noreferrer"
-					className={external}
-				>
-					GitHub ↗
-				</a>
+				<nav aria-label="Main navigation" className="site-nav">
+					<a
+						href="#overview"
+						aria-current={view === "overview" ? "page" : undefined}
+					>
+						Overview
+					</a>
+					<a
+						href="#reference"
+						aria-current={view === "reference" ? "page" : undefined}
+					>
+						Docs
+					</a>
+					<a href="https://github.com/billie-coop/serenity-now">GitHub ↗</a>
+					<ThemeToggle />
+				</nav>
 			</div>
-		</nav>
+		</header>
+	);
+}
+
+function Footer() {
+	return (
+		<footer className="site-container site-footer">
+			<p>
+				Made at <a href="https://github.com/billie-coop">Billie co-op</a> ·{" "}
+				<a href="https://github.com/billie-coop/serenity-now/blob/main/LICENSE">
+					MIT
+				</a>
+			</p>
+			<nav aria-label="Billie co-op projects">
+				<a href="https://billie-coop.github.io/seaq/">seaq</a>
+				<a
+					href="https://billie-coop.github.io/serenity-now/"
+					aria-current="true"
+				>
+					serenity-now
+				</a>
+				<a href="https://billie-coop.github.io/hereabouts/">hereabouts</a>
+			</nav>
+		</footer>
 	);
 }
 
 export function App() {
 	const view = useHashView();
 
-	// The overview always opens at the top, like a fresh page
 	useEffect(() => {
 		if (view === "overview") window.scrollTo({ top: 0 });
 	}, [view]);
 
 	return (
-		<div className="mx-auto min-h-screen max-w-7xl bg-white px-4 sm:px-6 dark:bg-gray-900">
+		<div className="site-shell">
+			<button
+				type="button"
+				className="skip-link"
+				onClick={() => {
+					const main = document.getElementById("main-content");
+					main?.focus();
+					main?.scrollIntoView();
+				}}
+			>
+				Skip to content
+			</button>
 			<NavBar view={view} />
-			{view === "reference" ? <Reference /> : <Overview />}
+			<main
+				id="main-content"
+				className="site-container site-main"
+				tabIndex={-1}
+			>
+				{view === "reference" ? <Reference /> : <Overview />}
+			</main>
+			<Footer />
 		</div>
 	);
 }

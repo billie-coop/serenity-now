@@ -1,59 +1,255 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+@custom-variant dark (&:where(.dark, .dark *));
 
-/* The app container is centered with a max width; paint the document
-   behind it the same color so wide screens don't show white gutters */
-html {
-	background-color: #fff;
+:root {
+	/* Shared Billie co-op neutrals, with serenity-now's teal accent. */
+	--site-bg: #191d24;
+	--site-surface: #252b34;
+	--site-text: #f1f3f5;
+	--site-muted: #a6adb8;
+	--site-border: #3b4350;
+	--site-accent: #5eead4;
+	color-scheme: dark;
+	font-family:
+		system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	color: var(--site-text);
+	background: var(--site-bg);
 }
-@media (prefers-color-scheme: dark) {
-	html {
-		background-color: #111827; /* matches the app's dark:bg-gray-900 */
+
+:root[data-theme="light"] {
+	--site-bg: #fafbfc;
+	--site-surface: #f0f2f5;
+	--site-text: #20252d;
+	--site-muted: #596273;
+	--site-border: #d4d9e1;
+	--site-accent: #0f766e;
+	color-scheme: light;
+}
+
+body {
+	margin: 0;
+}
+
+.site-shell {
+	display: flex;
+	min-height: 100vh;
+	flex-direction: column;
+}
+
+.site-container {
+	width: 100%;
+	max-width: 72rem;
+	margin-inline: auto;
+	padding-inline: 24px;
+}
+
+.site-header {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	border-bottom: 1px solid var(--site-border);
+	background: var(--site-bg);
+}
+
+.site-header-inner {
+	display: flex;
+	min-height: 72px;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+}
+
+.site-brand {
+	display: flex;
+	flex-direction: column;
+	line-height: 1.4;
+}
+
+.site-brand strong {
+	font-size: 18px;
+}
+
+.site-brand span {
+	color: var(--site-muted);
+	font-size: 12px;
+}
+
+.site-nav {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 14px;
+	font-weight: 500;
+}
+
+.site-nav a {
+	padding: 8px 10px;
+	border-radius: 6px;
+	color: var(--site-muted);
+}
+
+.site-nav a:hover,
+.site-nav a[aria-current="page"] {
+	color: var(--site-accent);
+	background: var(--site-surface);
+}
+
+.theme-toggle {
+	padding: 6px 10px;
+	border: 1px solid var(--site-border);
+	border-radius: 6px;
+	background: var(--site-surface);
+	color: var(--site-text);
+	font-size: 14px;
+	cursor: pointer;
+}
+
+.theme-toggle:hover {
+	border-color: var(--site-accent);
+}
+
+.site-main {
+	flex: 1;
+}
+
+.docs-intro {
+	padding-block: 48px 32px;
+	border-bottom: 1px solid var(--site-border);
+	margin-bottom: 32px;
+}
+
+.site-footer {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 16px;
+	margin-top: 48px;
+	padding-block: 32px;
+	border-top: 1px solid var(--site-border);
+	color: var(--site-muted);
+	font-size: 14px;
+}
+
+.site-footer nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 20px;
+}
+
+.site-footer a:hover {
+	color: var(--site-accent);
+	text-decoration: underline;
+}
+
+:focus-visible {
+	outline: 2px solid var(--site-accent);
+	outline-offset: 4px;
+}
+
+.skip-link {
+	position: fixed;
+	top: 8px;
+	left: 20px;
+	z-index: 20;
+	transform: translateY(-150%);
+	padding: 10px 16px;
+	border: 1px solid var(--site-accent);
+	border-radius: 6px;
+	background: var(--site-bg);
+}
+
+.skip-link:focus {
+	transform: translateY(0);
+}
+
+@media (max-width: 639px) {
+	.site-container {
+		padding-inline: 20px;
+	}
+
+	.site-header-inner {
+		flex-wrap: wrap;
+		gap: 8px;
+		padding-block: 12px;
+	}
+
+	.site-nav {
+		gap: 0;
+	}
+
+	.site-nav a {
+		padding: 8px;
+	}
+
+	.site-footer {
+		flex-direction: column;
+	}
+
+	.reference-prose :is(h2, h3) {
+		scroll-margin-top: 9rem;
 	}
 }
 
-/* Reference view: visual structure on top of the rendered README */
+@media (max-width: 420px) {
+	.site-header-inner {
+		gap: 12px;
+	}
 
-/* Clear section breaks before each h2 */
+	.site-brand {
+		flex-direction: row;
+		align-items: baseline;
+		gap: 8px;
+	}
+
+	.site-nav {
+		width: 100%;
+		justify-content: space-between;
+	}
+}
+
+/* Reference view: structure on top of the repo's rendered README. */
+.reference-prose {
+	--tw-prose-body: var(--site-muted);
+	--tw-prose-lead: var(--site-muted);
+	--tw-prose-captions: var(--site-muted);
+	--tw-prose-headings: var(--site-text);
+	--tw-prose-bold: var(--site-text);
+	--tw-prose-code: var(--site-text);
+	--tw-prose-links: var(--site-accent);
+	--tw-prose-counters: var(--site-muted);
+	--tw-prose-bullets: var(--site-muted);
+	--tw-prose-hr: var(--site-border);
+	--tw-prose-quotes: var(--site-text);
+	--tw-prose-quote-borders: var(--site-border);
+	--tw-prose-th-borders: var(--site-border);
+	--tw-prose-td-borders: var(--site-border);
+}
 .reference-prose h2 {
 	margin-top: 3rem;
 	padding-top: 2rem;
-	border-top: 1px solid #e5e7eb;
+	border-top: 1px solid var(--site-border);
 }
 .reference-prose > h2:first-child {
 	margin-top: 0;
 	padding-top: 0;
 	border-top: none;
 }
-@media (prefers-color-scheme: dark) {
-	.reference-prose h2 {
-		border-top-color: #1f2937;
-	}
-}
 
-/* Inline code as a subtle chip, distinct from prose without shouting.
-   (Code inside pre blocks keeps the block styling.) */
 .reference-prose :not(pre) > code {
-	background-color: #f3f4f6;
-	border: 1px solid #e5e7eb;
+	background: var(--site-surface);
+	border: 1px solid var(--site-border);
 	border-radius: 0.25rem;
 	padding: 0.1rem 0.3rem;
 	font-weight: 500;
-}
-@media (prefers-color-scheme: dark) {
-	.reference-prose :not(pre) > code {
-		background-color: #1f2937;
-		border-color: #374151;
-	}
+	overflow-wrap: anywhere;
 }
 
-/* Wide tables (the options table) scroll instead of breaking the column */
 .reference-prose table {
 	display: block;
 	overflow-x: auto;
 }
 
-/* Added and removed lines in the README's CLI output samples */
 .reference-prose .out-add {
 	color: #6ee7b7;
 }

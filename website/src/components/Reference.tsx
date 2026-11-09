@@ -122,6 +122,7 @@ export function Reference() {
 		const onHashChange = () => {
 			const target = currentSection();
 			if (target) scrollToSection(target);
+			else window.scrollTo({ top: 0 });
 		};
 		window.addEventListener("hashchange", onHashChange);
 		return () => window.removeEventListener("hashchange", onHashChange);
@@ -141,48 +142,76 @@ export function Reference() {
 				}
 			},
 			// A band just below the sticky nav: the heading crossing it is "active"
-			{ rootMargin: "-64px 0px -75% 0px" },
+			{ rootMargin: "-96px 0px -75% 0px" },
 		);
 		for (const h of root.querySelectorAll("h2, h3")) observer.observe(h);
 		return () => observer.disconnect();
 	}, []);
 
 	return (
-		<div className="mx-auto flex max-w-7xl gap-10">
-			<nav
-				className="hidden w-56 shrink-0 lg:block"
-				aria-label="Table of contents"
-			>
-				<div className="sticky top-16 max-h-[calc(100vh-5rem)] overflow-y-auto pb-8">
-					<p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-						On this page
-					</p>
-					<ul className="space-y-1 border-l border-gray-200 text-sm dark:border-gray-800">
-						{referenceToc.map((entry) => (
-							<li key={entry.id}>
-								<a
-									href={`#reference/${entry.id}`}
-									className={`-ml-px block border-l py-1 leading-snug [overflow-wrap:anywhere] ${
-										entry.level === 3 ? "pl-7" : "pl-4"
-									} ${
-										activeId === entry.id
-											? "border-teal-600 font-medium text-teal-700 dark:border-teal-400 dark:text-teal-300"
-											: "border-transparent text-gray-500 hover:border-gray-400 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-									}`}
-								>
-									{entry.text}
-								</a>
-							</li>
+		<>
+			<header className="docs-intro">
+				<h1 className="text-4xl font-bold tracking-tight text-(--site-text) sm:text-5xl">
+					Docs
+				</h1>
+			</header>
+			<details className="mb-8 rounded-lg border border-(--site-border) bg-(--site-surface) p-4 lg:hidden">
+				<summary className="cursor-pointer text-sm font-medium text-(--site-text)">
+					On this page
+				</summary>
+				<nav
+					aria-label="Mobile table of contents"
+					className="mt-3 grid gap-2 text-sm"
+				>
+					{referenceToc
+						.filter((entry) => entry.level === 2)
+						.map((entry) => (
+							<a
+								key={entry.id}
+								href={`#reference/${entry.id}`}
+								className="text-(--site-accent) hover:underline"
+							>
+								{entry.text}
+							</a>
 						))}
-					</ul>
-				</div>
-			</nav>
-			<article
-				ref={articleRef}
-				className="reference-prose prose prose-gray min-w-0 max-w-[52rem] flex-1 pb-16 dark:prose-invert prose-headings:scroll-mt-20 prose-a:text-teal-700 dark:prose-a:text-teal-300 prose-pre:border prose-pre:border-gray-700/60 prose-pre:bg-gray-950 prose-pre:text-gray-100 prose-pre:shadow-sm prose-code:before:content-none prose-code:after:content-none"
-				// biome-ignore lint/security/noDangerouslySetInnerHtml: rendering our own README from this repo, not user input
-				dangerouslySetInnerHTML={{ __html: referenceHtml }}
-			/>
-		</div>
+				</nav>
+			</details>
+			<div className="mx-auto flex gap-10">
+				<nav
+					className="hidden w-56 shrink-0 lg:block"
+					aria-label="Table of contents"
+				>
+					<div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pb-8">
+						<p className="mb-3 text-xs font-semibold uppercase tracking-wide text-(--site-muted)">
+							On this page
+						</p>
+						<ul className="space-y-1 border-l border-(--site-border) text-sm">
+							{referenceToc.map((entry) => (
+								<li key={entry.id}>
+									<a
+										href={`#reference/${entry.id}`}
+										className={`-ml-px block border-l py-1 leading-snug [overflow-wrap:anywhere] ${
+											entry.level === 3 ? "pl-7" : "pl-4"
+										} ${
+											activeId === entry.id
+												? "border-(--site-accent) font-medium text-(--site-accent)"
+												: "border-transparent text-(--site-muted) hover:border-(--site-muted) hover:text-(--site-text)"
+										}`}
+									>
+										{entry.text}
+									</a>
+								</li>
+							))}
+						</ul>
+					</div>
+				</nav>
+				<article
+					ref={articleRef}
+					className="reference-prose prose prose-slate dark:prose-invert min-w-0 max-w-[52rem] flex-1 pb-16 prose-headings:scroll-mt-24 prose-a:text-(--site-accent) prose-pre:border prose-pre:border-slate-700/60 prose-pre:bg-slate-950 prose-pre:text-slate-100 prose-pre:shadow-sm prose-code:before:content-none prose-code:after:content-none"
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: rendering our own README from this repo, not user input
+					dangerouslySetInnerHTML={{ __html: referenceHtml }}
+				/>
+			</div>
+		</>
 	);
 }
