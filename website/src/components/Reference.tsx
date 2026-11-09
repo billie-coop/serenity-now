@@ -151,13 +151,9 @@ export function Reference() {
 	return (
 		<>
 			<header className="docs-intro">
-				<p className="site-eyebrow mb-4">serenity-now</p>
 				<h1 className="text-4xl font-bold tracking-tight text-(--site-text) sm:text-5xl">
-					Documentation
+					Docs
 				</h1>
-				<p className="mt-4 text-lg text-(--site-muted)">
-					Get started, configure your workspace, and keep it in sync.
-				</p>
 			</header>
 			<details className="mb-8 rounded-lg border border-(--site-border) bg-(--site-surface) p-4 lg:hidden">
 				<summary className="cursor-pointer text-sm font-medium text-(--site-text)">

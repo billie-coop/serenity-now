@@ -1,5 +1,4 @@
 import { useState } from "react";
-import gif from "../../../serenity-now.gif";
 import { DOCS } from "../../../src/docs/content";
 import { Terminal } from "./Terminal";
 
@@ -30,17 +29,15 @@ function CopyCommand({ command }: { command: string }) {
 
 function Hero() {
 	return (
-		<section className="grid grid-cols-1 gap-10 py-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-center">
+		<section className="grid grid-cols-1 gap-8 pt-7 pb-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-center lg:pt-8 lg:pb-7">
 			<div>
-				<p className="site-eyebrow mb-4">Open source by Billie co-op</p>
-				<h1 className="text-4xl font-bold tracking-tight text-(--site-text) sm:text-5xl">
+				<h1 className="text-3xl font-bold tracking-tight text-(--site-text) sm:text-4xl">
 					serenity-now
 				</h1>
-				<p className="mt-4 text-lg text-(--site-muted)">
-					Keeps your TypeScript monorepo's workspace dependencies, tsconfig{" "}
+				<p className="mt-4 text-base text-(--site-muted)">
+					Syncs TypeScript monorepo dependencies, tsconfig{" "}
 					<code className="text-base">paths</code> and project{" "}
-					<code className="text-base">references</code> in sync with the imports
-					your code actually uses.
+					<code className="text-base">references</code> with your imports.
 				</p>
 				<div className="mt-6 flex flex-wrap items-center gap-3">
 					<CopyCommand command={`npx ${DOCS.npmPackage}`} />
@@ -48,7 +45,7 @@ function Hero() {
 						href="#reference"
 						className="rounded-md px-3 py-2 text-sm font-medium text-(--site-accent) hover:bg-(--site-surface)"
 					>
-						Read the docs →
+						Docs →
 					</a>
 				</div>
 			</div>
@@ -81,11 +78,8 @@ function ThreeFiles() {
 	return (
 		<section className="py-12">
 			<h2 className="text-2xl font-bold tracking-tight text-(--site-text)">
-				Three files that have to agree
+				Examples
 			</h2>
-			<p className="mt-2 max-w-3xl text-(--site-muted)">
-				serenity-now reads the import and rewrites the other two to match.
-			</p>
 			<div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
 				{THREE_FILES.map((f) => (
 					<div
@@ -141,34 +135,12 @@ function Commands() {
 	);
 }
 
-function SerenityAside() {
-	return (
-		<section
-			aria-label="Serenity now!"
-			className="mt-8 flex flex-col items-center gap-4 border-t border-(--site-border) py-12 text-center"
-		>
-			<img
-				src={gif}
-				alt="Frank Costanza yelling &quot;Serenity now!&quot;"
-				width={280}
-				className="rounded-lg"
-				loading="lazy"
-			/>
-			<p className="max-w-md text-sm text-(--site-muted)">
-				Because keeping monorepo dependencies in sync by hand will have you
-				yelling <strong>"SERENITY NOW!"</strong> at your monitor.
-			</p>
-		</section>
-	);
-}
-
 export function Overview() {
 	return (
 		<>
 			<Hero />
 			<ThreeFiles />
 			<Commands />
-			<SerenityAside />
 		</>
 	);
 }

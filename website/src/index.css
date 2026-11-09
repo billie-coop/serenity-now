@@ -113,14 +113,6 @@ body {
 	flex: 1;
 }
 
-.site-eyebrow {
-	color: var(--site-accent);
-	font-size: 12px;
-	font-weight: 600;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
-}
-
 .docs-intro {
 	padding-block: 48px 32px;
 	border-bottom: 1px solid var(--site-border);
