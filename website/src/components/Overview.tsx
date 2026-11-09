@@ -1,4 +1,5 @@
 import { useState } from "react";
+import gif from "../../../serenity-now.gif";
 import { DOCS } from "../../../src/docs/content";
 import { Terminal } from "./Terminal";
 
@@ -76,20 +77,20 @@ const THREE_FILES = [
 
 function ThreeFiles() {
 	return (
-		<section className="py-12">
+		<section className="py-8">
 			<h2 className="text-2xl font-bold tracking-tight text-(--site-text)">
 				Examples
 			</h2>
-			<div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+			<div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
 				{THREE_FILES.map((f) => (
 					<div
 						key={f.file}
 						className="flex flex-col overflow-hidden rounded-lg border border-(--site-border)"
 					>
-						<p className="border-b border-(--site-border) px-4 py-2.5 font-mono text-xs text-(--site-muted)">
+						<p className="border-b border-(--site-border) px-3 py-2 font-mono text-xs text-(--site-muted)">
 							{f.file}
 						</p>
-						<pre className="flex-1 overflow-x-auto bg-slate-950 px-4 py-3 font-mono text-xs leading-relaxed text-slate-100">
+						<pre className="flex-1 overflow-x-auto bg-slate-950 px-3 py-2 font-mono text-xs leading-normal text-slate-100">
 							{f.code}
 						</pre>
 					</div>
@@ -101,15 +102,15 @@ function ThreeFiles() {
 
 function Commands() {
 	return (
-		<section className="py-12">
+		<section className="py-8">
 			<h2 className="text-2xl font-bold tracking-tight text-(--site-text)">
 				Commands
 			</h2>
-			<div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+			<div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
 				{DOCS.commands.map((c) => (
 					<div
 						key={c.name}
-						className="rounded-lg border border-(--site-border) p-4"
+						className="rounded-lg border border-(--site-border) p-3"
 					>
 						<code className="font-mono text-sm font-semibold text-(--site-accent)">
 							npx {DOCS.npmPackage}
@@ -141,6 +142,15 @@ export function Overview() {
 			<Hero />
 			<ThreeFiles />
 			<Commands />
+			<div className="mt-8 flex justify-center border-t border-(--site-border) py-8">
+				<img
+					src={gif}
+					alt="Frank Costanza yelling"
+					width={280}
+					className="rounded-lg"
+					loading="lazy"
+				/>
+			</div>
 		</>
 	);
 }
